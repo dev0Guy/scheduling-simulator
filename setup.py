@@ -4,6 +4,8 @@ from Cython.Build import cythonize
 extensions = [
     Extension(name="core.action", sources=["src/core/action.pyx"]),
     Extension(name="core.observation", sources=["src/core/observation.pyx"]),
+    Extension(name="core.job", sources=["src/core/job.pyx"]),
+	
 ]
 
 setup(

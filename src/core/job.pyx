@@ -1,0 +1,98 @@
+
+cdef enum JobStatus:
+	NOT_CREATED = 0
+	PENDING = 1
+	RUNNING = 2
+	COMPLETED = 3
+
+cdef struct JobMetadata:
+	JobStatus status
+	unsigned int arrival_time
+	unsigned int size
+	unsigned int ttl
+	unsigned int wait_time
+	unsigned int scheduled_at
+	unsigned int finished_at
+
+cdef class Job:
+	cdef public int[:,::1] usage
+	cdef readonly JobMetadata metadata
+
+
+	def __init__(self, int[:,::1] usage, unsigned int arrival_time, unsigned int size) -> None:
+		self.usage = usage
+		self.metadata = JobMetadata()
+		self.metadata.arrival_time = arrival_time
+		self.metadata.size = size
+		self.metadata.wait_time = 0
+		self.metadata.ttl = size
+		self.metadata.scheduled_at = 0
+		self.metadata.finished_at = 0
+
+		if self.metadata.arrival_time == 0:
+			self.metadata.status = JobStatus.PENDING
+		else:
+			self.metadata.status = JobStatus.NOT_CREATED
+
+	cpdef void forward_time(self, unsigned int time) except *:
+		if self.metadata.status == JobStatus.PENDING:
+			self.metadata.wait_time += 1
+		elif self.metadata.status == JobStatus.RUNNING and self.metadata.ttl > 0:
+			self.shift_usage_left()
+			self.metadata.ttl -= 1
+		elif self.metadata.status == JobStatus.RUNNING and self.metadata.ttl == 0:
+			self.metadata.status = JobStatus.COMPLETED
+			self.metadata.finished_at = time
+		elif self.metadata.status == JobStatus.NOT_CREATED:
+			pass
+		else:
+			raise ValueError(f"Unknown job status: {self.metadata.status}")
+
+	def __repr__(self):
+		cdef str status
+
+		if self.metadata.status == JobStatus.NOT_CREATED:
+			status = "NOT_CREATED"
+		elif self.metadata.status == JobStatus.PENDING:
+			status = "PENDING"
+		elif self.metadata.status == JobStatus.RUNNING:
+			status = "RUNNING"
+		elif self.metadata.status == JobStatus.COMPLETED:
+			status = "COMPLETED"
+		else:
+			status = f"UNKNOWN({<int>self.metadata.status})"
+		return (
+			f"Job("
+			f"status={status}, "
+			f"arrival_time={self.metadata.arrival_time}, "
+			f"size={self.metadata.size}, "
+			f"ttl={self.metadata.ttl}, "
+			f"wait_time={self.metadata.wait_time}, "
+			f"scheduled_at={self.metadata.scheduled_at}, "
+			f"finished_at={self.metadata.finished_at}"
+			f")"
+		)
+
+	cdef void shift_usage_left(self) noexcept:
+		cdef:
+			Py_ssize_t i, j
+			Py_ssize_t rows = self.usage.shape[0]
+			Py_ssize_t cols = self.usage.shape[1]
+		for i in range(rows):
+			for j in range(cols - 1):
+				self.usage[i, j] = self.usage[i, j + 1]
+			self.usage[i, cols - 1] = 0
+
+
+	cpdef void update_status(self, JobStatus new_status, unsigned int time) except *:
+		if self.metadata.status == JobStatus.PENDING and new_status == JobStatus.RUNNING:
+			self.metadata.scheduled_at = time
+			self.metadata.status = new_status
+		elif self.metadata.status == JobStatus.RUNNING and new_status == JobStatus.COMPLETED:
+			self.metadata.finished_at = time
+			self.metadata.status = new_status
+			assert self.metadata.ttl == 0, "Job should have completed when TTL reaches 0"
+		elif self.metadata.status == JobStatus.NOT_CREATED and new_status == JobStatus.PENDING:
+			self.metadata.status = new_status
+		else:
+			raise ValueError(f"Invalid status transition from {self.metadata.status} to {new_status}")

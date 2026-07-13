@@ -1,4 +1,4 @@
-from core.action cimport Action
+#from core.action import Action
 
 cdef class Observation:
     cdef readonly int[:, :, ::1] machines_free_space
@@ -8,7 +8,7 @@ cdef class Observation:
     cdef readonly int[::1] jobs_lengths
     cdef readonly int[::1] jobs_ttl
     cdef readonly int[::1] time
-    cdef readonly Action last_action
+    #cdef readonly Action last_action
     def __init__(
         self,
         int[:, :, ::1] machines_free_space,

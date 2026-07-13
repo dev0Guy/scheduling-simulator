@@ -2,10 +2,10 @@
 
 # Remove every generated Cython/build artifact so nothing stale survives.
 clean:
-	find . -name "src/*.c" -not -path "./build/*" -delete
-	find . -name "src/*.html" -delete
-	find . -name "src/*.so" -delete
-	rm -rf build src/*.egg-info
+	find src -name "*.c" -delete
+	find src -name "*.html" -delete
+	find src -name "*.so" -delete
+	rm -rf build src/*/*.egg-info
 
 # Compile the extensions in-place from current .pyx sources.
 build:
