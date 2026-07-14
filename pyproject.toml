@@ -9,6 +9,7 @@ description = "Example library with a Cython-compiled core"
 requires-python = ">=3.10"
 readme = "README.md"
 dependencies = [
+    "hypothesis>=6.156.6",
     "numpy>=2.2.6",
     "ruff>=0.15.21",
 ]

@@ -12,7 +12,7 @@ build:
 	python setup.py build_ext --inplace
 
 test: 
-	pytest -s . 
+	pytest -s -v . 
 
 # Clean, then build from scratch -- use this whenever things feel stale.
 rebuild: clean build test

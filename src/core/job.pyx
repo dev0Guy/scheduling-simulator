@@ -102,4 +102,5 @@ cdef class Job:
 		elif self.metadata.status == JobStatus.NOT_CREATED and new_status == JobStatus.PENDING:
 			self.metadata.status = new_status
 		else:
+			print("Invalid status transition from", self.metadata.status, "to", new_status)
 			raise ValueError(f"Invalid status transition from {self.metadata.status} to {new_status}")
