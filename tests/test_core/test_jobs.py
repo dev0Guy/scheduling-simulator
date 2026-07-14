@@ -18,7 +18,6 @@ def assert_metadata(
     status: Optional[int] = None,
     ttl: Optional[int] = None,
 ) -> None:
-    # TODO: allow none values for finished_at and scheduled_at
     assert arrival_time is None or job.metadata["arrival_time"] == arrival_time
     assert size is None or job.metadata["size"] == size
     assert wait_time is None or job.metadata["wait_time"] == wait_time
@@ -30,6 +29,7 @@ def assert_metadata(
 
 def assert_and_forward_job_to_pending(job: Job) -> int:
     arrival_time = job.metadata["arrival_time"]
+    original_usage = job.usage.copy()
     if arrival_time != 0:
         for _ in range(arrival_time):
             assert_metadata(
@@ -49,6 +49,7 @@ def assert_and_forward_job_to_pending(job: Job) -> int:
         status=1,
         ttl=job.metadata["size"],
     )
+    assert np.array_equal(job.usage, original_usage)
     return arrival_time
 
 
@@ -56,12 +57,16 @@ def assert_pending_to_completed(job: Job, current_time: int) -> int:
     arrival_time = job.metadata["arrival_time"]
     assert current_time >= arrival_time and job.metadata["status"] == 1
     wait_time = current_time - arrival_time
+    previous_usage = job.usage.copy()
     job.update_status(2, current_time)
     size = job.metadata["size"]
     assert_metadata(job, status=2, scheduled_at=current_time, wait_time=wait_time)
+    assert np.array_equal(job.usage, previous_usage)
     finish_time = current_time + size
     for tick in range(current_time + 1, finish_time):
+        previous_usage = job.usage.copy()
         job.forward_time(current_time + tick)
+        assert np.array_equal(job.usage[..., :-1], previous_usage[...,1:])
         assert_metadata(job, status=2)
     job.forward_time(finish_time)
     assert_metadata(
@@ -77,12 +82,14 @@ def assert_pending_to_completed(job: Job, current_time: int) -> int:
 
 def assert_wait_time_ops_actions(job: Job, current_time: int, n_nops: int) -> int:
     assert n_nops >= 0 and job.metadata["status"] == 1
+    original_usage = job.usage.copy()
     assert_metadata(job, wait_time=0, status=1)
     tick = current_time + 1
     for wait_time in range(1, n_nops + 1):
         job.forward_time(current_time + tick)
         assert_metadata(job, wait_time=wait_time, status=1)
     assert_metadata(job, wait_time=n_nops)
+    assert np.array_equal(job.usage, original_usage)
     return current_time + n_nops
 
 
