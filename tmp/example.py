@@ -1,8 +1,7 @@
 import numpy as np
 from core import Job
 
-usage = np.array([[1, 2, 3],
-                  [4, 5, 6]], dtype=np.int32)
+usage = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int32)
 
 
 job = Job(usage, arrival_time=0, size=3)

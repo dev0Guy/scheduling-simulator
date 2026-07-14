@@ -37,13 +37,20 @@ cdef class Job:
 	cpdef void forward_time(self, unsigned int time) except *:
 		if self.metadata.status == JobStatus.PENDING:
 			self.metadata.wait_time += 1
-		elif self.metadata.status == JobStatus.RUNNING and self.metadata.ttl > 0:
+		elif self.metadata.status == JobStatus.RUNNING:
 			self.shift_usage_left()
+
+			if self.metadata.ttl == 1:
+				self.metadata.status = JobStatus.COMPLETED
+				self.metadata.finished_at = time
+
 			self.metadata.ttl -= 1
-		elif self.metadata.status == JobStatus.RUNNING and self.metadata.ttl == 0:
-			self.metadata.status = JobStatus.COMPLETED
-			self.metadata.finished_at = time
+
+		elif self.metadata.status == JobStatus.NOT_CREATED and time == self.metadata.arrival_time:
+			self.metadata.status = JobStatus.PENDING
 		elif self.metadata.status == JobStatus.NOT_CREATED:
+			pass
+		elif self.metadata.status == JobStatus.COMPLETED:
 			pass
 		else:
 			raise ValueError(f"Unknown job status: {self.metadata.status}")

@@ -11,5 +11,8 @@ clean:
 build:
 	python setup.py build_ext --inplace
 
+test: 
+	pytest -s . 
+
 # Clean, then build from scratch -- use this whenever things feel stale.
-rebuild: clean build
+rebuild: clean build test
