@@ -43,26 +43,3 @@ def test_machine_allocation_with_usage_smaller_or_equal_to_capacity_and_forward_
             np.asarray(machine.usage),
             expected,
         )
-
-
-# def test_machine_initialization()-> None:
-# # TODO: create capacity and usage
-# # add usage to machine, x times
-# # and then foward time untill
-# capacity = np.array([[1, 2, 3], [1, 2, 3]], dtype=np.int32)
-# print(capacity.shape)
-# print(capacity.ndim)
-# usage =  np.array([[1, 1, 1], [1, 1, 1]], dtype=np.int32)
-# machine = Machine(capacity)
-# print(np.asarray(machine.capacity))
-#
-# machine.add_usage(usage)
-#
-# print(np.asarray(machine.usage))
-# machine.forward_time(0)
-# print(np.asarray(machine.usage))
-# machine.forward_time(0)
-# machine.forward_time(0)
-# print(np.asarray(machine.usage))
-#
-#
