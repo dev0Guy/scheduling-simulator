@@ -5,6 +5,7 @@ extensions = [
     Extension(name="core.action", sources=["src/core/action.pyx"]),
     Extension(name="core.observation", sources=["src/core/observation.pyx"]),
     Extension(name="core.job", sources=["src/core/job.pyx"]),
+    Extension(name="core.machine", sources=["src/core/machine.pyx"]),
 ]
 
 setup(

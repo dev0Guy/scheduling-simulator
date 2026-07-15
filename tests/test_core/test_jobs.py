@@ -54,19 +54,16 @@ def assert_and_forward_job_to_pending(job: Job) -> int:
 
 
 def assert_pending_to_completed(job: Job, current_time: int) -> int:
+    original_usage = job.usage.copy()
     arrival_time = job.metadata["arrival_time"]
     assert current_time >= arrival_time and job.metadata["status"] == 1
     wait_time = current_time - arrival_time
-    previous_usage = job.usage.copy()
     job.update_status(2, current_time)
     size = job.metadata["size"]
     assert_metadata(job, status=2, scheduled_at=current_time, wait_time=wait_time)
-    assert np.array_equal(job.usage, previous_usage)
     finish_time = current_time + size
     for tick in range(current_time + 1, finish_time):
-        previous_usage = job.usage.copy()
         job.forward_time(current_time + tick)
-        assert np.array_equal(job.usage[..., :-1], previous_usage[...,1:])
         assert_metadata(job, status=2)
     job.forward_time(finish_time)
     assert_metadata(
@@ -77,6 +74,7 @@ def assert_pending_to_completed(job: Job, current_time: int) -> int:
         finished_at=finish_time,
         ttl=0,
     )
+    assert np.array_equal(job.usage, original_usage)
     return finish_time
 
 

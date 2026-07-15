@@ -24,6 +24,11 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [dependency-groups]
+build = [
+    "cython>=3.2.8",
+    "setuptools>=83.0.0",
+]
 dev = [
+    "hypothesis>=6.156.6",
     "pytest>=9.1.1",
 ]

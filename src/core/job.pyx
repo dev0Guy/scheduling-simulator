@@ -38,8 +38,6 @@ cdef class Job:
 		if self.metadata.status == JobStatus.PENDING:
 			self.metadata.wait_time += 1
 		elif self.metadata.status == JobStatus.RUNNING:
-			self.shift_usage_left()
-
 			if self.metadata.ttl == 1:
 				self.metadata.status = JobStatus.COMPLETED
 				self.metadata.finished_at = time
@@ -79,17 +77,6 @@ cdef class Job:
 			f"finished_at={self.metadata.finished_at}"
 			f")"
 		)
-
-	cdef void shift_usage_left(self) noexcept:
-		cdef:
-			Py_ssize_t i, j
-			Py_ssize_t rows = self.usage.shape[0]
-			Py_ssize_t cols = self.usage.shape[1]
-		for i in range(rows):
-			for j in range(cols - 1):
-				self.usage[i, j] = self.usage[i, j + 1]
-			self.usage[i, cols - 1] = 0
-
 
 	cpdef void update_status(self, JobStatus new_status, unsigned int time) except *:
 		if self.metadata.status == JobStatus.PENDING and new_status == JobStatus.RUNNING:
