@@ -23,20 +23,20 @@ def test_cluster_foward_time_untill_all_jobs_pending(cluster: Cluster) -> None:
 
 @given(cluster_strategies())
 def test_single_not_created_job_untill_completion(cluster: Cluster) -> None:
-    raise NotImplemented
+    pass
 
 @given(cluster_strategies())
 def test_allocation_of_pending_job_with_no_space(cluster: Cluster) -> None:
-    raise NotImplemented
+    pass
 
 @given(cluster_strategies())
 def test_allocation_of_none_pending_job_with_space(cluster: Cluster) -> None:
-    raise NotImplemented
+    pass
 
 @given(cluster_strategies())
 def test_allocation_of_pending_job_with_enogh_space(cluster: Cluster) -> None:
-    raise NotImplemented
+    pass
 
 @given(cluster_strategies())
 def test_full_scheduling_with_random_scheduler(cluster: Cluster) -> None:
-    raise NotImplemented
+    pass

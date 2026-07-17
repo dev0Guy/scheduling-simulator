@@ -10,6 +10,8 @@ class Observation:
     status: npt.NDArray[np.int32]
     ttl: npt.NDArray[np.int32]
     arrival_time: npt.NDArray[np.int32]
+    size: npt.NDArray[np.int32]
+    time: int
 
     def to_dict(self) -> dict: ...
 
@@ -19,3 +21,5 @@ class Cluster:
     def __init__(self, machines: List[Machine], jobs: List[Job]) -> None: ...
 
     def step(self, v: int) -> Observation: ...
+
+    def get_observation(self) -> Observation: ...
