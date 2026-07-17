@@ -3,6 +3,7 @@ import numpy as np
 from core.job import Job
 from core.machine import Machine
 from core.cluster import Cluster
+
 usage1 = np.array([
     [2, 1],
     [2, 1],
@@ -29,11 +30,11 @@ print(cluster)
 print("----"*20)
 print(cluster.observation.to_dict())
 
-print(cluster.allocate(0, 0))
+print(cluster.step(1))
 print(cluster.observation.to_dict())
-cluster.foward_time()
-cluster.foward_time()
-cluster.foward_time()
+cluster.step(0)
+cluster.step(0)
+cluster.step(0)
 print(cluster.observation.to_dict())
 
 # # import numpy as np

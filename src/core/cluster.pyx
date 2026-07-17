@@ -4,12 +4,7 @@ import numpy as np
 cimport numpy as cnp
 from cython cimport boundscheck, wraparound, initializedcheck
 
-
 cdef class Observation:
-    cdef int[:, :, ::1] machines_usage
-    cdef int[:, :, ::1] jobs_usage
-    cdef int[::1] status
-    cdef int[::1] ttl
 
     @boundscheck(False)
     @wraparound(False)
@@ -19,20 +14,18 @@ cdef class Observation:
         self.jobs_usage = jobs_usage
         self.status = np.empty(jobs_usage.shape[0],dtype=np.int32)
         self.ttl = np.empty(jobs_usage.shape[0],dtype=np.int32)
+        self.arrival_time = np.empty(jobs_usage.shape[0],dtype=np.int32)
 
     cpdef dict to_dict(self):
         return {
             'machines_usage': np.asarray(self.machines_usage),
             'jobs_usage': np.asarray(self.jobs_usage),
             'status': np.asarray(self.status),
+            'arrival': np.asarray(self.arrival_time),
             'ttl': np.asarray(self.ttl)
         }
 
 cdef class Cluster:
-    cdef Job[::1] jobs
-    cdef Machine[::1] machines
-    cdef int time
-    cdef readonly Observation observation
 
     @boundscheck(False)
     @wraparound(False)
@@ -90,12 +83,15 @@ cdef class Cluster:
             int[:, :, ::1] usage = self.observation.jobs_usage
             int[::1] status = self.observation.status
             int[::] ttl = self.observation.ttl
+            int[::] arrival_time = self.observation.arrival_time
+
 
         # Update jobs
         for i in range(self.jobs.shape[0]):
             job = self.jobs[i]
             status[i] = job.metadata.status
             ttl[i] = job.metadata.ttl
+            arrival_time[i] = job.metadata.arrival_time
             for t in range(job.usage.shape[0]):
                 for r in range(job.usage.shape[1]):
                     usage[i, t, r] = job.usage[t, r]
@@ -112,7 +108,7 @@ cdef class Cluster:
                     )
 
     @initializedcheck(False)
-    cpdef bint allocate(self, int machine_index, int job_index):
+    cdef bint allocate(self, int machine_index, int job_index):
         cdef:
             Machine machine = self.machines[machine_index]
             Job job = self.jobs[job_index]
@@ -127,12 +123,11 @@ cdef class Cluster:
             return False
 
         job.update_status(JobStatus.RUNNING, self.time)
-        self.update_observation()
 
         return True
 
     @initializedcheck(False)
-    cpdef void foward_time(self):
+    cdef void foward_time(self):
         cdef:
             Py_ssize_t i
             Machine machine
@@ -148,6 +143,33 @@ cdef class Cluster:
             machine = self.machines[i]
             machine.forward_time(self.time)
 
+    cdef Action action_from(self, unsigned int v):
+        cdef bint skip_time = v == 0
+        cdef unsigned int selected_machine = (v - 1) // self.machines.shape[0]
+        cdef unsigned int selected_job = (v - 1) % self.machines.shape[0]
+
+        return Action(skip_time, selected_machine, selected_job)
+
+    cpdef Observation step(self, unsigned int v):
+        cdef:
+            Action action = self.action_from(v)
+            unsigned int selected_machine
+            unsigned int selected_job
+
+        if action.skip:
+            self.foward_time()
+        else:
+            selected_machine = action.selected_machine
+            selected_job = action.selected_job
+            self.allocate(selected_machine, selected_job)
+
         self.update_observation()
+        return self.observation
+
+
+
+
+
+
 
     ## TODO: make the step fucntion where instead of inside python code
