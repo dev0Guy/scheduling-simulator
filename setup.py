@@ -1,11 +1,13 @@
 from setuptools import setup, Extension
 from Cython.Build import cythonize
+import numpy as np
 
 extensions = [
     Extension(name="core.action", sources=["src/core/action.pyx"]),
     Extension(name="core.observation", sources=["src/core/observation.pyx"]),
     Extension(name="core.job", sources=["src/core/job.pyx"]),
     Extension(name="core.machine", sources=["src/core/machine.pyx"]),
+    Extension(name="core.cluster", sources=["src/core/cluster.pyx"], include_dirs=[np.get_include()]),
 ]
 
 setup(

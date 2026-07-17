@@ -2,12 +2,17 @@ import numpy as np
 from cython cimport boundscheck, wraparound, initializedcheck
 
 cdef class Machine:
-    cdef readonly int[:, ::1] capacity
-    cdef readonly int[:, ::1] usage
 
     def __init__(self, int[:, ::1] capacity) -> None:
         self.usage = np.zeros_like(capacity)
         self.capacity = capacity
+
+    def __repr__(self):
+        return (
+            f"Machine("
+            f"shape=({self.capacity.shape[0]}, {self.capacity.shape[1]}), "
+            f")"
+        )
 
     @boundscheck(False)
     @wraparound(False)

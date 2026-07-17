@@ -1,23 +1,7 @@
+from .job cimport Job, JobStatus, JobMetadata
 
-cdef enum JobStatus:
-	NOT_CREATED = 0
-	PENDING = 1
-	RUNNING = 2
-	COMPLETED = 3
-
-cdef struct JobMetadata:
-	JobStatus status
-	unsigned int arrival_time
-	unsigned int size
-	unsigned int ttl
-	unsigned int wait_time
-	unsigned int scheduled_at
-	unsigned int finished_at
 
 cdef class Job:
-	cdef public int[:,::1] usage
-	cdef readonly JobMetadata metadata
-
 
 	def __init__(self, int[:,::1] usage, unsigned int arrival_time, unsigned int size) -> None:
 		self.usage = usage
@@ -68,6 +52,7 @@ cdef class Job:
 			status = f"UNKNOWN({<int>self.metadata.status})"
 		return (
 			f"Job("
+			f"shape=({self.usage.shape[0]}, {self.usage.shape[1]}), "
 			f"status={status}, "
 			f"arrival_time={self.metadata.arrival_time}, "
 			f"size={self.metadata.size}, "
