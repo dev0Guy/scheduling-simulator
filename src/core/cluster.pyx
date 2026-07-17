@@ -10,11 +10,16 @@ cdef class Observation:
     @wraparound(False)
     @initializedcheck(False)
     def __init__(self, int[:, :, ::1] machines_usage, int[:, :, ::1] jobs_usage) -> None:
+        cdef Py_ssize_t n_jobs = jobs_usage.shape[0]
+
+        self.status = np.empty(n_jobs, dtype=np.int32)
+        self.ttl = np.empty(n_jobs, dtype=np.int32)
+        self.arrival_time = np.empty(n_jobs, dtype=np.int32)
+        self.size = np.empty(n_jobs, dtype=np.int32)
+        self.time = 0
+
         self.machines_usage = machines_usage
         self.jobs_usage = jobs_usage
-        self.status = np.empty(jobs_usage.shape[0],dtype=np.int32)
-        self.ttl = np.empty(jobs_usage.shape[0],dtype=np.int32)
-        self.arrival_time = np.empty(jobs_usage.shape[0],dtype=np.int32)
 
     cpdef dict to_dict(self):
         return {
@@ -22,7 +27,9 @@ cdef class Observation:
             'jobs_usage': np.asarray(self.jobs_usage),
             'status': np.asarray(self.status),
             'arrival': np.asarray(self.arrival_time),
-            'ttl': np.asarray(self.ttl)
+            'ttl': np.asarray(self.ttl),
+            'size': np.asarray(self.size),
+            'time': self.time
         }
 
 cdef class Cluster:
@@ -37,6 +44,15 @@ cdef class Cluster:
         self.observation = self.create_observation()
         self.update_observation()
 
+        if (
+            self.observation.machines_usage.shape[0] != self.observation.jobs_usage.shape[0] or
+            self.observation.machines_usage.shape[1] != self.observation.jobs_usage.shape[1] or
+            self.observation.machines_usage.shape[2] != self.observation.jobs_usage.shape[2]
+        ):
+            raise ValueError(
+                "machines_usage and jobs_usage must have the same shape"
+            )
+
     def __repr__(self):
         return (
             f"Cluster(\n"
@@ -46,6 +62,9 @@ cdef class Cluster:
             f")"
         )
 
+    cpdef Observation get_observation(self):
+        return self.observation
+
     @boundscheck(False)
     @wraparound(False)
     @initializedcheck(False)
@@ -53,16 +72,16 @@ cdef class Cluster:
         cdef:
             Py_ssize_t NJ = self.jobs.shape[0]
             Py_ssize_t NM = self.machines.shape[0]
-            Py_ssize_t T = self.jobs[0].usage.shape[0]
-            Py_ssize_t R = self.jobs[0].usage.shape[1]
+            Py_ssize_t R = self.jobs[0].usage.shape[0]
+            Py_ssize_t T = self.jobs[0].usage.shape[1]
             Py_ssize_t i, t, r
 
         cdef:
             cnp.ndarray[cnp.int32_t, ndim=3] machines_free_space = np.empty(
-                (NM, T, R), dtype=np.int32
+                (NM, R, T), dtype=np.int32
             )
             cnp.ndarray[cnp.int32_t, ndim=3] jobs_usage = np.empty(
-                (NM, T, R), dtype=np.int32
+                (NM, R, T), dtype=np.int32
             )
 
         return Observation(
@@ -85,6 +104,7 @@ cdef class Cluster:
             int[::] ttl = self.observation.ttl
             int[::] arrival_time = self.observation.arrival_time
 
+        self.observation.time = self.time
 
         # Update jobs
         for i in range(self.jobs.shape[0]):
@@ -92,19 +112,19 @@ cdef class Cluster:
             status[i] = job.metadata.status
             ttl[i] = job.metadata.ttl
             arrival_time[i] = job.metadata.arrival_time
-            for t in range(job.usage.shape[0]):
-                for r in range(job.usage.shape[1]):
-                    usage[i, t, r] = job.usage[t, r]
+            for r in range(job.usage.shape[0]):
+                for t in range(job.usage.shape[1]):
+                    usage[i, r, t] = job.usage[r, t]
 
         # Update machines free space
         for i in range(self.machines.shape[0]):
             machine = self.machines[i]
 
-            for t in range(machine.capacity.shape[0]):
-                for r in range(machine.capacity.shape[1]):
-                    free[i, t, r] = (
-                        machine.capacity[t, r]
-                        - machine.usage[t, r]
+            for r in range(machine.capacity.shape[0]):
+                for t in range(machine.capacity.shape[1]):
+                    free[i, r, t] = (
+                        machine.capacity[r, t]
+                        - machine.usage[r, t]
                     )
 
     @initializedcheck(False)
