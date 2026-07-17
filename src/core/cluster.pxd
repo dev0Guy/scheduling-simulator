@@ -20,12 +20,11 @@ cdef class Observation:
 
 
 cdef class Cluster:
-    cdef Job[::1] jobs
     cdef Machine[::1] machines
+    cdef Job[::1] jobs
     cdef int time
     cdef readonly Observation observation
 
-    cpdef Observation step(self, unsigned int action)
     cdef Observation create_observation(self)
     cpdef void update_observation(self)
     cdef bint allocate(self, int machine_index, int job_index)

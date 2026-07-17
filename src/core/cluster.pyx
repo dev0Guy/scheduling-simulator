@@ -30,9 +30,9 @@ cdef class Cluster:
     @boundscheck(False)
     @wraparound(False)
     @initializedcheck(False)
-    def __init__(self, Job[::1] jobs, Machine[::1] machines) -> None:
-        self.jobs = jobs
-        self.machines = machines
+    def __init__(self, list[Machine] machines, list[Job] jobs) -> None:
+        self.machines = np.array(machines)
+        self.jobs = np.array(jobs)
         self.time = 0
         self.observation = self.create_observation()
         self.update_observation()
