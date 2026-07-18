@@ -1,9 +1,9 @@
-name: Tests and Coverage
+```yaml
+name: Tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 permissions:
@@ -11,127 +11,81 @@ permissions:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        python-version:
-          - "3.10"
+        python-version: ["3.10"]
 
     steps:
-
-      # -----------------------------
-      # Checkout
-      # -----------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # -----------------------------
-      # Python
-      # -----------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-
-      # -----------------------------
-      # uv
-      # -----------------------------
       - name: Install uv
         uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: false
 
+      - name: Create virtual environment
+        run: uv venv
 
-      # -----------------------------
-      # Remove old/corrupt environments
-      # -----------------------------
-      - name: Clean build environment
-        run: |
-          rm -rf .venv
-          rm -rf ~/.cache/uv
-          rm -rf ~/.cache/pip
-
-
-      # -----------------------------
-      # Install dependencies
-      # -----------------------------
       - name: Install dependencies
         run: |
-          uv sync --dev --no-cache
+          uv sync --dev
 
+      - name: Clean previous build artifacts
+        run: |
+          rm -rf build
+          rm -rf src/*.egg-info
+          rm -rf src/scheduling_simulator.egg-info
+          find src -name "*.so" -delete
+          find src -name "*.c" -delete
+          find src -name "*.cpp" -delete
 
-      # -----------------------------
-      # Verify NumPy works
-      # -----------------------------
-      - name: Verify NumPy
+      - name: Verify NumPy installation
         run: |
           uv run python - <<'PY'
           import numpy
           print("NumPy version:", numpy.__version__)
-          print("NumPy path:", numpy.__file__)
+          print("NumPy location:", numpy.__file__)
           PY
 
-
-      # -----------------------------
-      # Clean Cython artifacts
-      # -----------------------------
-      - name: Clean Cython build
-        run: |
-          rm -rf build
-          find . -name "*.so" -delete
-          find . -name "*.c" -delete
-          find . -name "*.cpp" -delete
-
-
-      # -----------------------------
-      # Build Cython extensions
-      # -----------------------------
       - name: Build Cython extensions
         run: |
-          uv run pip install -e .
+          uv run python setup.py build_ext --inplace
 
-
-      # -----------------------------
-      # Verify compiled package
-      # -----------------------------
-      - name: Verify Cython import
+      - name: Verify compiled package
         run: |
           uv run python - <<'PY'
           from scheduling_simulator.core import Cluster, Job, Machine
-          print("Cython import OK")
+          print("Cython extensions imported successfully.")
           PY
 
-
-      # -----------------------------
-      # Run tests + coverage
-      # -----------------------------
       - name: Run tests with coverage
         run: |
           uv run pytest \
+            -v \
             --cov=scheduling_simulator \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html
 
-
-      # -----------------------------
-      # Upload HTML report
-      # -----------------------------
       - name: Upload HTML coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
           path: htmlcov/
 
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
 
-      # -----------------------------
-      # GitHub Actions summary
-      # -----------------------------
-      - name: Generate coverage summary
+      - name: Coverage summary
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
           filename: coverage.xml
@@ -139,17 +93,12 @@ jobs:
           format: markdown
           output: both
 
+      - name: Publish summary
+        run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
-      - name: Publish coverage summary
-        run: |
-          cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
-
-
-      # -----------------------------
-      # Optional Codecov upload
-      # -----------------------------
-      - name: Upload coverage to Codecov
+      - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           fail_ci_if_error: false
+```

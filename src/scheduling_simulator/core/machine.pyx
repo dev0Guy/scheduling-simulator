@@ -1,4 +1,5 @@
 import numpy as np
+cimport numpy as cnp
 from cython cimport boundscheck, wraparound, initializedcheck
 
 cdef class Machine:
