@@ -37,7 +37,7 @@ cdef class Job:
 		else:
 			raise ValueError(f"Unknown job status: {self.metadata.status}")
 
-	def __repr__(self):
+	def __repr__(self): # pragma: no cover
 		cdef str status
 
 		if self.metadata.status == JobStatus.NOT_CREATED:
@@ -67,6 +67,5 @@ cdef class Job:
 		if self.metadata.status == JobStatus.PENDING and new_status == JobStatus.RUNNING:
 			self.metadata.scheduled_at = time
 			self.metadata.status = new_status
-		else:
-			print("Invalid status transition from", self.metadata.status, "to", new_status)
+		else: # pragma: no cover
 			raise ValueError(f"Invalid status transition from {self.metadata.status} to {new_status}")

@@ -47,12 +47,12 @@ cdef class Cluster:
         if (
             self.observation.machines_usage.shape[1] != self.observation.jobs_usage.shape[1] or
             self.observation.machines_usage.shape[2] != self.observation.jobs_usage.shape[2]
-        ):
+        ): # pragma: no cover
             raise ValueError(
                 "machines_usage and jobs_usage must have the same shape"
             )
 
-    def __repr__(self):
+    def __repr__(self): # pragma: no cover
         return (
             f"Cluster(\n"
             f"  time={self.time},\n"

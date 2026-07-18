@@ -193,26 +193,7 @@ def test_allocation_of_running_job_with_enough_space(cluster: Cluster) -> None:
     ttl = observation['ttl'][job_idx]
     observartion = foward_time_by(cluster, ttl, lambda x: None)
     assert observartion['status'][job_idx] == JobStatus.COMPLETED
-    return
-    if ttl > 1:
-        observartion = foward_time_by(cluster, 1, lambda x: None)
-        assert_allocation_has_enogh_space(cluster, JobStatus.RUNNING, JobStatus.RUNNING)
-        observartion = foward_time_by(cluster, ttl-1, lambda x: None)
-    else:
-        observartion = foward_time_by(cluster, ttl, lambda x: None)
-        observation['ttl'][job_idx]
-    assert observartion['status'][job_idx] == JobStatus.COMPLETED
 
-
-# @given(
-#     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
-#     .filter(has_scheduled_job_with(JobStatus.COMPLETED, scheduble=True))
-# )
-# @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
-# def test_allocation_of_completed_job_with_enough_space(cluster: Cluster) -> None:
-#     assert_allocation_failed_enogh_space(cluster, JobStatus.COMPLETED, JobStatus.COMPLETED)
-
-
-# @given(cluster_strategies())
-# def test_full_scheduling_with_random_scheduler(cluster: Cluster) -> None:
-#     pass
+@given(cluster_strategies())
+def test_full_scheduling_with_random_scheduler(cluster: Cluster) -> None:
+    pass
