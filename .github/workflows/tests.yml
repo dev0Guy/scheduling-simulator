@@ -1,4 +1,4 @@
-```yaml
+
 name: Tests
 
 on:
@@ -101,4 +101,3 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
-```
