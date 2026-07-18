@@ -2,21 +2,25 @@ from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 import numpy as np
 
+numpy_include = np.get_include()
+
 extensions = [
     Extension(
         "scheduling_simulator.core.job",
         ["src/scheduling_simulator/core/job.pyx"],
+        include_dirs=[numpy_include],
         define_macros=[("CYTHON_TRACE", "1")]
     ),
     Extension(
         "scheduling_simulator.core.machine",
         ["src/scheduling_simulator/core/machine.pyx"],
+        include_dirs=[numpy_include],
         define_macros=[("CYTHON_TRACE", "1")]
     ),
     Extension(
         "scheduling_simulator.core.cluster",
         ["src/scheduling_simulator/core/cluster.pyx"],
-        include_dirs=[np.get_include()],
+        include_dirs=[numpy_include],
         define_macros=[("CYTHON_TRACE", "1")]
     ),
 ]
