@@ -18,6 +18,7 @@ readme = "README.md"
 dependencies = [
     "hypothesis>=6.156.6",
     "numpy==2.2.6",
+    "pygame>=2.6.1",
     "ruff>=0.15.21",
     "setuptools>=83.0.0",
 ]
@@ -54,8 +55,12 @@ plugins = [
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+exclude_lines = [
+    "pragma: no cover"
+]
 exclude_also = [
     "def __repr__",
+
 ]
 
 

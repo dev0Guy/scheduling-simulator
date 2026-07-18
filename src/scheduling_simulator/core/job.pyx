@@ -35,9 +35,10 @@ cdef class Job:
 		elif self.metadata.status == JobStatus.COMPLETED:
 			pass
 		else:
-			raise ValueError(f"Unknown job status: {self.metadata.status}")
+			raise ValueError(f"Unknown job status: {self.metadata.status}") # pragma: no cover
 
-	def __repr__(self): # pragma: no cover
+	# pragma: no cover
+	def __repr__(self):
 		cdef str status
 
 		if self.metadata.status == JobStatus.NOT_CREATED:

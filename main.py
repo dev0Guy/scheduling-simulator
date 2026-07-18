@@ -1,44 +1,70 @@
 import numpy as np
 
-from core.job import Job
-from core.machine import Machine
-from core.cluster import Cluster
+from scheduling_simulator.core.job import Job
+from scheduling_simulator.core.machine import Machine
+from scheduling_simulator.core.cluster import Cluster
+from scheduling_simulator.core.render import Renderer
+from time import sleep
 
-usage1 = np.array(
-    [
-        [2, 1],
-        [2, 1],
-    ],
-    dtype=np.int32,
-)
 
-usage2 = np.array(
-    [
-        [1, 3],
-        [1, 2],
-    ],
-    dtype=np.int32,
-)
+renderer = Renderer()
 
-jobs = [
-    Job(usage1, arrival_time=0, size=3),
-    Job(usage2, arrival_time=2, size=2),
-]
+# ------------------------------------------------------------------
+# Create 10 jobs
+# Each job has a 3-resource × 10-time usage matrix.
+# ------------------------------------------------------------------
+
+jobs = []
+
+for i in range(10):
+    usage = np.array(
+        [
+            [2 + (i % 3)] * 10,
+            [3 + (i % 3)] * 10,
+            [4 + (i % 3)] * 10,
+        ],
+        dtype=np.int32,
+    )
+    size = int((i % 5) + 2)
+    usage[:, size:] = 0
+    jobs.append(
+        Job(
+            usage=usage,
+            arrival_time=i,
+            size=size,
+        )
+    )
+
+# ------------------------------------------------------------------
+# Create 3 identical machines
+# Each machine has capacity 20 for every resource and every time slot.
+# Shape = (3 resources, 10 time slots)
+# ------------------------------------------------------------------
+
+capacity = np.full((3, 10), 20, dtype=np.int32)
 
 machines = [
-    Machine(np.array([[8, 16], [8, 16]], dtype=np.int32)),
-    Machine(np.array([[4, 8], [4, 8]], dtype=np.int32)),
+    Machine(capacity.copy()),
+    Machine(capacity.copy()),
+    Machine(capacity.copy()),
 ]
 
 cluster = Cluster(machines, jobs)
 
-print(cluster)
-print("----" * 20)
+print("-" * 80)
 print(cluster.observation.to_dict())
 
-print(cluster.step(1))
-print(cluster.observation.to_dict())
-cluster.step(0)
-cluster.step(0)
-cluster.step(0)
-print(cluster.observation.to_dict())
+# ------------------------------------------------------------------
+# Run one action per job
+# ------------------------------------------------------------------
+
+for action in range(len(jobs)):
+    obs = cluster.step(action)
+    renderer.render(obs)
+    sleep(1)
+
+# Final observation
+obs = cluster.observation
+
+renderer.render(obs)
+sleep(5)

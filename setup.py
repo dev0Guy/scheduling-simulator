@@ -23,6 +23,12 @@ extensions = [
         include_dirs=[numpy_include],
         define_macros=[("CYTHON_TRACE", "1")]
     ),
+    Extension(
+        "scheduling_simulator.core.render",
+        ["src/scheduling_simulator/core/render.pyx"],
+        include_dirs=[numpy_include],
+        define_macros=[("CYTHON_TRACE", "1")]
+    ),
 ]
 
 setup(

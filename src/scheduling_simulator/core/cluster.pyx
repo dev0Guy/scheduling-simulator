@@ -4,12 +4,13 @@ import numpy as np
 cimport numpy as cnp
 from cython cimport boundscheck, wraparound, initializedcheck
 
+
 cdef class Observation:
 
     @boundscheck(False)
     @wraparound(False)
     @initializedcheck(False)
-    def __init__(self, int[:, :, ::1] machines_usage, int[:, :, ::1] jobs_usage) -> None:
+    def __init__(self, int[:, :, ::1] machines_usage, int [:, :, ::1] machines_capacity, int[:, :, ::1] jobs_usage) -> None:
         cdef Py_ssize_t n_jobs = jobs_usage.shape[0]
 
         self.status = np.empty(n_jobs, dtype=np.int32)
@@ -20,10 +21,12 @@ cdef class Observation:
 
         self.machines_usage = machines_usage
         self.jobs_usage = jobs_usage
+        self.machines_capacity = machines_capacity
 
     cpdef dict to_dict(self):
         return {
             'machines_usage': np.asarray(self.machines_usage),
+            'machines_capacity': np.asarray(self.machines_capacity),
             'jobs_usage': np.asarray(self.jobs_usage),
             'status': np.asarray(self.status),
             'arrival': np.asarray(self.arrival_time),
@@ -52,7 +55,8 @@ cdef class Cluster:
                 "machines_usage and jobs_usage must have the same shape"
             )
 
-    def __repr__(self): # pragma: no cover
+    # pragma: no cover
+    def __repr__(self):
         return (
             f"Cluster(\n"
             f"  time={self.time},\n"
@@ -74,6 +78,7 @@ cdef class Cluster:
             Py_ssize_t R = self.jobs[0].usage.shape[0]
             Py_ssize_t T = self.jobs[0].usage.shape[1]
             Py_ssize_t i, r, t
+            Machine machine
 
         cdef:
             cnp.ndarray[cnp.int32_t, ndim=3] machines_free_space = np.empty(
@@ -82,9 +87,19 @@ cdef class Cluster:
             cnp.ndarray[cnp.int32_t, ndim=3] jobs_usage = np.empty(
                 (NJ, R, T), dtype=np.int32
             )
+            cnp.ndarray[cnp.int32_t, ndim=3] machines_capacity = np.empty(
+                (NM, R, T), dtype=np.int32
+            )
+
+        cdef int id
+
+        for idx in range(NM):
+            machine = <Machine>self.machines[idx]
+            machines_capacity[idx, :, :] = machine.capacity
 
         return Observation(
             machines_free_space,
+            machines_capacity,
             jobs_usage
         )
 
@@ -97,11 +112,13 @@ cdef class Cluster:
             Py_ssize_t i, t, r
             Job job
             Machine machine
-            int[:, :, ::1] free = self.observation.machines_usage
-            int[:, :, ::1] usage = self.observation.jobs_usage
+            int[:, :, ::1] machine_usage = self.observation.machines_usage
+            int[:, :, ::1] job_usage = self.observation.jobs_usage
             int[::1] status = self.observation.status
             int[::] ttl = self.observation.ttl
             int[::] arrival_time = self.observation.arrival_time
+            int[::] size = self.observation.size
+
 
         self.observation.time = self.time
 
@@ -111,20 +128,18 @@ cdef class Cluster:
             status[i] = job.metadata.status
             ttl[i] = job.metadata.ttl
             arrival_time[i] = job.metadata.arrival_time
+            size[i] = job.metadata.size
             for r in range(job.usage.shape[0]):
                 for t in range(job.usage.shape[1]):
-                    usage[i, r, t] = job.usage[r, t]
+                    job_usage[i, r, t] = job.usage[r, t]
 
-        # Update machines free space
+        # # Update machines machine_usage space
         for i in range(self.machines.shape[0]):
             machine = self.machines[i]
 
             for r in range(machine.capacity.shape[0]):
                 for t in range(machine.capacity.shape[1]):
-                    free[i, r, t] = (
-                        machine.capacity[r, t]
-                        - machine.usage[r, t]
-                    )
+                    machine_usage[i, r, t] = machine.usage[r, t]
 
     @initializedcheck(False)
     cdef bint allocate(self, int machine_index, int job_index):

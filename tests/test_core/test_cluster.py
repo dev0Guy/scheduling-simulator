@@ -19,11 +19,10 @@ def does_cluster_has_job_with_status(*, status: JobStatus) -> Callable[[Cluster]
 def get_possible_allocation_foreach_job(cluster: Cluster) -> np.ndarray:
     observation = cluster.get_observation().to_dict()
     return np.all(
-        observation["machines_usage"][:, None, :, :]
+        observation["machines_capacity"][:, None, :, :]
         >= observation["jobs_usage"][None, :, :, :],
         axis=(2, 3),
     )
-
 
 def has_scheduled_job_with(status: JobStatus, scheduble: bool = True) -> Callable[[Cluster], bool]:
 
@@ -44,7 +43,6 @@ def does_cluster_can_run_all_jobs(cluster: Cluster) -> bool:
     compatible = get_possible_allocation_foreach_job(cluster)
     return bool(compatible.any(axis=0).all())
 
-
 def assert_changed_to_pending_in(observation: dict) -> None:
     time = observation["time"]
     for status, arrival in zip(observation["status"], observation["arrival"]):
@@ -61,7 +59,6 @@ def foward_time_by(
         observation = cluster.step(0).to_dict()
         assert_func(observation)
     return observation
-
 
 def assert_allocation_has_enogh_space(cluster: Cluster, before_status: JobStatus, after_status: JobStatus) -> int:
     observation = cluster.get_observation().to_dict()
@@ -80,7 +77,6 @@ def assert_allocation_has_enogh_space(cluster: Cluster, before_status: JobStatus
     assert observation["status"][job_idx] == after_status
     return job_idx
 
-
 @given(cluster=cluster_strategies(), row=st.data())
 def test_action_conversion(cluster: Cluster, row: st.DataObject) -> None:
     observation = cluster.get_observation().to_dict()
@@ -93,7 +89,6 @@ def test_action_conversion(cluster: Cluster, row: st.DataObject) -> None:
     after = cluster.action_to_value(action)
     assert after == (0, machine_idx, job_idx)
 
-
 @given(cluster_strategies())
 @settings(deadline=None)
 def test_cluster_foward_time_untill_all_jobs_pending(cluster: Cluster) -> None:
@@ -101,7 +96,6 @@ def test_cluster_foward_time_untill_all_jobs_pending(cluster: Cluster) -> None:
     max_job_arrival_time = np.max(observation["arrival"])
     assert_changed_to_pending_in(observation)
     foward_time_by(cluster, max_job_arrival_time, assert_changed_to_pending_in)
-
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
@@ -141,7 +135,6 @@ def test_single_not_created_job_untill_completion(cluster: Cluster) -> None:
         observation["status"][job_not_created_idx] == 3
         and observation["ttl"][job_not_created_idx] == 0
     )
-
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
@@ -196,4 +189,5 @@ def test_allocation_of_running_job_with_enough_space(cluster: Cluster) -> None:
 
 @given(cluster_strategies())
 def test_full_scheduling_with_random_scheduler(cluster: Cluster) -> None:
+    # TODO: add random scheduler and make sure capable
     pass

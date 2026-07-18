@@ -11,6 +11,7 @@ cdef struct Action:
 
 cdef class Observation:
     cdef int[:, :, ::1] machines_usage
+    cdef int[:, :, ::1] machines_capacity
     cdef int[:, :, ::1] jobs_usage
     cdef int[::1] status
     cdef int[::1] ttl
