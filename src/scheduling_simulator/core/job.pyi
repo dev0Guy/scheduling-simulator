@@ -5,9 +5,9 @@ from enum import IntEnum
 
 class JobStatus(IntEnum):
     NOT_CREATED = 0
-    PENDING = 0
-    RUNNING = 1
-    COMPLETED = 1
+    PENDING = 1
+    RUNNING = 2
+    COMPLETED = 3
 
 class JobMetadata(TypedDict):
     status: JobStatus

@@ -1,9 +1,9 @@
 
 cpdef enum JobStatus:
-	NOT_CREATED
-	PENDING
-	RUNNING
-	COMPLETED
+	NOT_CREATED = 0
+	PENDING = 1
+	RUNNING = 2
+	COMPLETED = 3
 
 cdef struct JobMetadata:
 	JobStatus status

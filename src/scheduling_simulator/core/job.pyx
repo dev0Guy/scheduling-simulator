@@ -67,12 +67,6 @@ cdef class Job:
 		if self.metadata.status == JobStatus.PENDING and new_status == JobStatus.RUNNING:
 			self.metadata.scheduled_at = time
 			self.metadata.status = new_status
-		elif self.metadata.status == JobStatus.RUNNING and new_status == JobStatus.COMPLETED:
-			self.metadata.finished_at = time
-			self.metadata.status = new_status
-			assert self.metadata.ttl == 0, "Job should have completed when TTL reaches 0"
-		elif self.metadata.status == JobStatus.NOT_CREATED and new_status == JobStatus.PENDING:
-			self.metadata.status = new_status
 		else:
 			print("Invalid status transition from", self.metadata.status, "to", new_status)
 			raise ValueError(f"Invalid status transition from {self.metadata.status} to {new_status}")

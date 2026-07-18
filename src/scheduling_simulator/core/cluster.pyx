@@ -190,11 +190,3 @@ cdef class Cluster:
 
         self.update_observation()
         return self.observation
-
-
-
-
-
-
-
-    ## TODO: make the step fucntion where instead of inside python code
