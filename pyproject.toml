@@ -54,6 +54,9 @@ plugins = [
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+exclude_also = [
+    "def __repr__",
+]
 
 
 [tool.pytest.ini_options]
