@@ -17,8 +17,9 @@ readme = "README.md"
 
 dependencies = [
     "hypothesis>=6.156.6",
-    "numpy>=2.2.6",
+    "numpy==2.2.6",
     "ruff>=0.15.21",
+    "setuptools>=83.0.0",
 ]
 
 
@@ -65,14 +66,14 @@ testpaths = [
 build = [
     "cython>=3.2.8",
     "setuptools>=83.0.0",
-    "numpy>=2.2.6",
+    "numpy==2.2.6",
     "wheel>=0.47.0",
 ]
 
 dev = [
     "cython>=3.2.8",
     "hypothesis>=6.156.6",
-    "numpy>=2.2.6",
+    "numpy==2.2.6",
     "pytest>=9.1.1",
     "pytest-cov>=6.0.0",
     "coverage>=7.0",

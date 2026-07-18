@@ -45,11 +45,13 @@ jobs:
           enable-cache: true
 
 
-      # ----------------------------
-      # Install dependencies
-      # ----------------------------
+      - name: Clean uv environment
+        run: |
+          rm -rf .venv
+
       - name: Install dependencies
         run: |
+          uv cache clean
           uv sync --dev --reinstall
 
 
