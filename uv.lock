@@ -2053,20 +2053,25 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "ruff" },
-    { name = "setuptools" },
 ]
 
 [package.optional-dependencies]
 test = [
     { name = "pytest" },
+    { name = "pytest-cov" },
 ]
 
 [package.dev-dependencies]
 build = [
     { name = "cython" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "setuptools" },
+    { name = "wheel" },
 ]
 dev = [
+    { name = "coverage" },
     { name = "cython" },
     { name = "hypothesis" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -2074,8 +2079,6 @@ dev = [
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "setuptools" },
-    { name = "wheel" },
 ]
 experiments = [
     { name = "gymnasium", extra = ["box2d"] },
@@ -2087,24 +2090,25 @@ requires-dist = [
     { name = "hypothesis", specifier = ">=6.156.6" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "ruff", specifier = ">=0.15.21" },
-    { name = "setuptools", specifier = ">=83.0.0" },
 ]
 provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 build = [
     { name = "cython", specifier = ">=3.2.8" },
+    { name = "numpy", specifier = ">=2.2.6" },
     { name = "setuptools", specifier = ">=83.0.0" },
+    { name = "wheel", specifier = ">=0.47.0" },
 ]
 dev = [
+    { name = "coverage", specifier = ">=7.0" },
     { name = "cython", specifier = ">=3.2.8" },
     { name = "hypothesis", specifier = ">=6.156.6" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-cov" },
-    { name = "setuptools", specifier = ">=83.0.0" },
-    { name = "wheel", specifier = ">=0.47.0" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
 ]
 experiments = [
     { name = "gymnasium", extras = ["box2d"], specifier = ">=1.3.0" },
