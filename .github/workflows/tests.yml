@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -20,52 +20,65 @@ jobs:
           - "3.10"
 
     steps:
-      # ----------------------------
+
+      # -----------------------------
       # Checkout
-      # ----------------------------
+      # -----------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ----------------------------
+      # -----------------------------
       # Python
-      # ----------------------------
+      # -----------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
 
-      # ----------------------------
+      # -----------------------------
       # uv
-      # ----------------------------
+      # -----------------------------
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
+          enable-cache: false
 
 
-      - name: Clean uv environment
+      # -----------------------------
+      # Remove old/corrupt environments
+      # -----------------------------
+      - name: Clean build environment
         run: |
           rm -rf .venv
+          rm -rf ~/.cache/uv
+          rm -rf ~/.cache/pip
 
+
+      # -----------------------------
+      # Install dependencies
+      # -----------------------------
       - name: Install dependencies
         run: |
-          uv cache clean
-          uv sync --dev --reinstall
+          uv sync --dev --no-cache
 
 
-      # ----------------------------
-      # Verify NumPy before Cython
-      # ----------------------------
+      # -----------------------------
+      # Verify NumPy works
+      # -----------------------------
       - name: Verify NumPy
         run: |
-          uv run python -c "import numpy; print('NumPy:', numpy.__version__)"
+          uv run python - <<'PY'
+          import numpy
+          print("NumPy version:", numpy.__version__)
+          print("NumPy path:", numpy.__file__)
+          PY
 
 
-      # ----------------------------
-      # Clean old Cython artifacts
-      # ----------------------------
+      # -----------------------------
+      # Clean Cython artifacts
+      # -----------------------------
       - name: Clean Cython build
         run: |
           rm -rf build
@@ -74,28 +87,28 @@ jobs:
           find . -name "*.cpp" -delete
 
 
-      # ----------------------------
+      # -----------------------------
       # Build Cython extensions
-      # ----------------------------
+      # -----------------------------
       - name: Build Cython extensions
         run: |
           uv run pip install -e .
 
 
-      # ----------------------------
-      # Verify compiled modules
-      # ----------------------------
+      # -----------------------------
+      # Verify compiled package
+      # -----------------------------
       - name: Verify Cython import
         run: |
-          uv run python -c "
+          uv run python - <<'PY'
           from scheduling_simulator.core import Cluster, Job, Machine
-          print('Cython import OK')
-          "
+          print("Cython import OK")
+          PY
 
 
-      # ----------------------------
+      # -----------------------------
       # Run tests + coverage
-      # ----------------------------
+      # -----------------------------
       - name: Run tests with coverage
         run: |
           uv run pytest \
@@ -105,19 +118,19 @@ jobs:
             --cov-report=html
 
 
-      # ----------------------------
+      # -----------------------------
       # Upload HTML report
-      # ----------------------------
+      # -----------------------------
       - name: Upload HTML coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html-report
+          name: coverage-html
           path: htmlcov/
 
 
-      # ----------------------------
-      # Add coverage to GitHub summary
-      # ----------------------------
+      # -----------------------------
+      # GitHub Actions summary
+      # -----------------------------
       - name: Generate coverage summary
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
@@ -132,9 +145,9 @@ jobs:
           cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
 
-      # ----------------------------
-      # Optional: Codecov upload
-      # ----------------------------
+      # -----------------------------
+      # Optional Codecov upload
+      # -----------------------------
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
