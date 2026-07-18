@@ -1,7 +1,7 @@
 import hypothesis.strategies as st
 from hypothesis.extra.numpy import arrays
 import numpy as np
-from core import Job, Machine, Cluster
+from scheduling_simulator.core import Job, Machine, Cluster
 from typing import TypedDict, Tuple
 from typing_extensions import Unpack
 

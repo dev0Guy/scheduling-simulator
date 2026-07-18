@@ -9,10 +9,10 @@ clean:
 
 # Compile the extensions in-place from current .pyx sources.
 build:
-	python setup.py build_ext --inplace
+	uv run setup.py build_ext --inplace
 
-test: 
-	pytest -s -v . 
+test:
+	CYTHON_TRACE=1 uv run pytest --cov=scheduling_simulator --cov-report=term-missing --cov-report=xml
 
 # Clean, then build from scratch -- use this whenever things feel stale.
 rebuild: clean build test

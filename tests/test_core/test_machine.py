@@ -1,6 +1,6 @@
 from hypothesis import given, strategies as st
 
-from core import Machine
+from scheduling_simulator.core import Machine
 import numpy as np
 from strategies import machine_strategies, usage_for_machine
 

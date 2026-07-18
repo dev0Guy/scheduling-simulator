@@ -1,27 +1,43 @@
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 import numpy as np
 
 extensions = [
-    Extension(name="core.job", sources=["src/core/job.pyx"]),
-    Extension(name="core.machine", sources=["src/core/machine.pyx"]),
     Extension(
-        name="core.cluster",
-        sources=["src/core/cluster.pyx"],
+        "scheduling_simulator.core.job",
+        ["src/scheduling_simulator/core/job.pyx"],
+        define_macros=[("CYTHON_TRACE", "1")]
+    ),
+    Extension(
+        "scheduling_simulator.core.machine",
+        ["src/scheduling_simulator/core/machine.pyx"],
+        define_macros=[("CYTHON_TRACE", "1")]
+    ),
+    Extension(
+        "scheduling_simulator.core.cluster",
+        ["src/scheduling_simulator/core/cluster.pyx"],
         include_dirs=[np.get_include()],
+        define_macros=[("CYTHON_TRACE", "1")]
     ),
 ]
 
 setup(
+    name="scheduling_simulator",
     package_dir={"": "src"},
-    packages=["core"],
+    packages=find_packages("src"),
     ext_modules=cythonize(
         extensions,
+        include_path=[
+            "src",
+            "src/scheduling_simulator",
+            "src/scheduling_simulator/core",
+        ],
         compiler_directives={
             "language_level": "3",
             "boundscheck": True,
             "wraparound": True,
+            "linetrace": True,
+            "binding": True,
         },
-        annotate=True,
     ),
 )

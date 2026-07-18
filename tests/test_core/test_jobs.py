@@ -2,9 +2,9 @@ import copy
 from typing import Optional
 
 import numpy as np
-from core import Job
+from scheduling_simulator.core import Job
 from hypothesis import given, strategies as st
-from core.job import JobStatus
+from scheduling_simulator.core.job import JobStatus
 from strategies import job_strategies
 
 

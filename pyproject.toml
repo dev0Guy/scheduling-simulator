@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "Cython>=3.0"]
+requires = ["setuptools>=68", "wheel", "Cython>=3.0", "numpy>=2.2.6", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -12,16 +12,29 @@ dependencies = [
     "hypothesis>=6.156.6",
     "numpy>=2.2.6",
     "ruff>=0.15.21",
+    "setuptools>=83.0.0",
 ]
 
 [project.optional-dependencies]
 test = ["pytest"]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "scheduling_simulator"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["scheduling_simulator"]
+
+[tool.hypothesis]
+database = true
+
+[tool.coverage.run]
+source = ["src/scheduling_simulator"]
+plugins = ["Cython.Coverage"]
+
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
 
 [dependency-groups]
 build = [
@@ -29,8 +42,13 @@ build = [
     "setuptools>=83.0.0",
 ]
 dev = [
+    "cython>=3.2.8",
     "hypothesis>=6.156.6",
+    "numpy>=2.2.6",
     "pytest>=9.1.1",
+    "pytest-cov",
+    "setuptools>=83.0.0",
+    "wheel>=0.47.0",
 ]
 experiments = [
     "gymnasium[box2d]>=1.3.0",
