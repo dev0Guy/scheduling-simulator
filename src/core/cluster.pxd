@@ -32,5 +32,7 @@ cdef class Cluster:
     cdef bint allocate(self, int machine_index, int job_index)
     cdef void foward_time(self)
     cdef Action action_from(self, unsigned int v)
+    cpdef tuple action_to_value(self, unsigned int v)
+    cpdef unsigned int allocation_to_action(self, unsigned int machine_idx, unsigned int job_idx)
     cpdef Observation step(self, unsigned int v)
     cpdef Observation get_observation(self)

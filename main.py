@@ -4,15 +4,21 @@ from core.job import Job
 from core.machine import Machine
 from core.cluster import Cluster
 
-usage1 = np.array([
-    [2, 1],
-    [2, 1],
-], dtype=np.int32)
+usage1 = np.array(
+    [
+        [2, 1],
+        [2, 1],
+    ],
+    dtype=np.int32,
+)
 
-usage2 = np.array([
-    [1, 3],
-    [1, 2],
-], dtype=np.int32)
+usage2 = np.array(
+    [
+        [1, 3],
+        [1, 2],
+    ],
+    dtype=np.int32,
+)
 
 jobs = [
     Job(usage1, arrival_time=0, size=3),
@@ -27,7 +33,7 @@ machines = [
 cluster = Cluster(machines, jobs)
 
 print(cluster)
-print("----"*20)
+print("----" * 20)
 print(cluster.observation.to_dict())
 
 print(cluster.step(1))

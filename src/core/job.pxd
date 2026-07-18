@@ -1,5 +1,5 @@
 
-cdef enum JobStatus:
+cpdef enum JobStatus:
 	NOT_CREATED = 0
 	PENDING = 1
 	RUNNING = 2

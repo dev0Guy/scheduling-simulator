@@ -5,7 +5,11 @@ import numpy as np
 extensions = [
     Extension(name="core.job", sources=["src/core/job.pyx"]),
     Extension(name="core.machine", sources=["src/core/machine.pyx"]),
-    Extension(name="core.cluster", sources=["src/core/cluster.pyx"], include_dirs=[np.get_include()]),
+    Extension(
+        name="core.cluster",
+        sources=["src/core/cluster.pyx"],
+        include_dirs=[np.get_include()],
+    ),
 ]
 
 setup(

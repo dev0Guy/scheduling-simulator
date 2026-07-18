@@ -4,6 +4,7 @@ from typing import Optional
 import numpy as np
 from core import Job
 from hypothesis import given, strategies as st
+from core.job import JobStatus
 from strategies import job_strategies
 
 
@@ -15,7 +16,7 @@ def assert_metadata(
     wait_time: Optional[int] = None,
     scheduled_at: Optional[int] = None,
     finished_at: Optional[int] = None,
-    status: Optional[int] = None,
+    status: Optional[JobStatus] = None,
     ttl: Optional[int] = None,
 ) -> None:
     assert arrival_time is None or job.metadata["arrival_time"] == arrival_time
@@ -37,7 +38,7 @@ def assert_and_forward_job_to_pending(job: Job) -> int:
                 wait_time=0,
                 scheduled_at=0,
                 finished_at=0,
-                status=0,
+                status=JobStatus.NOT_CREATED,
                 ttl=job.metadata["size"],
             )
         job.forward_time(arrival_time)
@@ -46,7 +47,7 @@ def assert_and_forward_job_to_pending(job: Job) -> int:
         wait_time=0,
         scheduled_at=0,
         finished_at=0,
-        status=1,
+        status=JobStatus.PENDING,
         ttl=job.metadata["size"],
     )
     assert np.array_equal(job.usage, original_usage)
@@ -58,17 +59,19 @@ def assert_pending_to_completed(job: Job, current_time: int) -> int:
     arrival_time = job.metadata["arrival_time"]
     assert current_time >= arrival_time and job.metadata["status"] == 1
     wait_time = current_time - arrival_time
-    job.update_status(2, current_time)
+    job.update_status(JobStatus.RUNNING, current_time)
     size = job.metadata["size"]
-    assert_metadata(job, status=2, scheduled_at=current_time, wait_time=wait_time)
+    assert_metadata(
+        job, status=JobStatus.RUNNING, scheduled_at=current_time, wait_time=wait_time
+    )
     finish_time = current_time + size
     for tick in range(current_time + 1, finish_time):
         job.forward_time(current_time + tick)
-        assert_metadata(job, status=2)
+        assert_metadata(job, status=JobStatus.RUNNING)
     job.forward_time(finish_time)
     assert_metadata(
         job,
-        status=3,
+        status=JobStatus.COMPLETED,
         scheduled_at=current_time,
         wait_time=wait_time,
         finished_at=finish_time,
@@ -81,11 +84,11 @@ def assert_pending_to_completed(job: Job, current_time: int) -> int:
 def assert_wait_time_ops_actions(job: Job, current_time: int, n_nops: int) -> int:
     assert n_nops >= 0 and job.metadata["status"] == 1
     original_usage = job.usage.copy()
-    assert_metadata(job, wait_time=0, status=1)
+    assert_metadata(job, wait_time=0, status=JobStatus.PENDING)
     tick = current_time + 1
     for wait_time in range(1, n_nops + 1):
         job.forward_time(current_time + tick)
-        assert_metadata(job, wait_time=wait_time, status=1)
+        assert_metadata(job, wait_time=wait_time, status=JobStatus.PENDING)
     assert_metadata(job, wait_time=n_nops)
     assert np.array_equal(job.usage, original_usage)
     return current_time + n_nops
@@ -124,7 +127,7 @@ def test_basic_example() -> None:
         wait_time=0,
         scheduled_at=0,
         finished_at=0,
-        status=0,
+        status=JobStatus.NOT_CREATED,
         ttl=3,
     )
 
@@ -136,7 +139,7 @@ def test_basic_example() -> None:
         wait_time=0,
         scheduled_at=0,
         finished_at=0,
-        status=1,
+        status=JobStatus.PENDING,
         ttl=3,
     )
 
@@ -148,11 +151,11 @@ def test_basic_example() -> None:
         wait_time=1,
         scheduled_at=0,
         finished_at=0,
-        status=1,
+        status=JobStatus.PENDING,
         ttl=3,
     )
 
-    job.update_status(2, 2)
+    job.update_status(JobStatus.RUNNING, 2)
     assert_metadata(
         job,
         arrival_time=arrival_time,
@@ -160,7 +163,7 @@ def test_basic_example() -> None:
         wait_time=1,
         scheduled_at=2,
         finished_at=0,
-        status=2,
+        status=JobStatus.RUNNING,
         ttl=3,
     )
 
@@ -172,7 +175,7 @@ def test_basic_example() -> None:
             wait_time=1,
             scheduled_at=2,
             finished_at=0,
-            status=2,
+            status=JobStatus.RUNNING,
             ttl=size - tick_count,
         )
         job.forward_time(3 + tick_count)
@@ -184,7 +187,7 @@ def test_basic_example() -> None:
         wait_time=1,
         scheduled_at=2,
         finished_at=5,
-        status=3,
+        status=JobStatus.COMPLETED,
         ttl=0,
     )
 
@@ -196,6 +199,6 @@ def test_basic_example() -> None:
         wait_time=1,
         scheduled_at=2,
         finished_at=5,
-        status=3,
+        status=JobStatus.COMPLETED,
         ttl=0,
     )

@@ -45,7 +45,6 @@ cdef class Cluster:
         self.update_observation()
 
         if (
-            self.observation.machines_usage.shape[0] != self.observation.jobs_usage.shape[0] or
             self.observation.machines_usage.shape[1] != self.observation.jobs_usage.shape[1] or
             self.observation.machines_usage.shape[2] != self.observation.jobs_usage.shape[2]
         ):
@@ -74,14 +73,14 @@ cdef class Cluster:
             Py_ssize_t NM = self.machines.shape[0]
             Py_ssize_t R = self.jobs[0].usage.shape[0]
             Py_ssize_t T = self.jobs[0].usage.shape[1]
-            Py_ssize_t i, t, r
+            Py_ssize_t i, r, t
 
         cdef:
             cnp.ndarray[cnp.int32_t, ndim=3] machines_free_space = np.empty(
                 (NM, R, T), dtype=np.int32
             )
             cnp.ndarray[cnp.int32_t, ndim=3] jobs_usage = np.empty(
-                (NM, R, T), dtype=np.int32
+                (NJ, R, T), dtype=np.int32
             )
 
         return Observation(
@@ -165,10 +164,16 @@ cdef class Cluster:
 
     cdef Action action_from(self, unsigned int v):
         cdef bint skip_time = v == 0
-        cdef unsigned int selected_machine = (v - 1) // self.machines.shape[0]
-        cdef unsigned int selected_job = (v - 1) % self.machines.shape[0]
-
+        cdef unsigned int selected_machine = (v - 1) // self.jobs.shape[0]
+        cdef unsigned int selected_job = (v - 1) % self.jobs.shape[0]
         return Action(skip_time, selected_machine, selected_job)
+
+    cpdef tuple action_to_value(self, unsigned int v):
+        cdef Action action = self.action_from(v)
+        return (action.skip, action.selected_machine, action.selected_job)
+
+    cpdef unsigned int allocation_to_action(self, unsigned int machine_idx, unsigned int job_idx):
+        return 1 + machine_idx * self.jobs.shape[0] + job_idx
 
     cpdef Observation step(self, unsigned int v):
         cdef:
