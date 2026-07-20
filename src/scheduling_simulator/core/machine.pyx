@@ -8,13 +8,12 @@ cdef class Machine:
         self.usage = np.zeros_like(capacity)
         self.capacity = capacity
 
-    # pragma: no cover
-    def __repr__(self):
-        return (
-            f"Machine("
-            f"shape=({self.capacity.shape[0]}, {self.capacity.shape[1]}), "
-            f")"
-        )
+    def __repr__(self): # pragma: no cover
+        return ( # pragma: no cover
+            f"Machine(" # pragma: no cover
+            f"shape=({self.capacity.shape[0]}, {self.capacity.shape[1]}), " # pragma: no cover
+            f")" # pragma: no cover
+        ) # pragma: no cover
 
     @boundscheck(False)
     @wraparound(False)
