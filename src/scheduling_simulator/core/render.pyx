@@ -173,7 +173,7 @@ cdef class Renderer:
                 True,
                 self._status_color(obs.status[job])
             )
-            meta_y = y + height + self.config.margin_between_machines - (self.config.secondary_title_font_size // 2)
+            meta_y = y + height + self.config.margin_between_machines - (self.config.secondary_title_font_size // 2) + 1
             self.screen.blit(meta_text, (x, meta_y))
 
     cpdef object render(self, Observation obs):

@@ -7,7 +7,7 @@ from scheduling_simulator.core.render import Renderer
 from time import sleep
 
 
-renderer = Renderer(False)
+renderer = Renderer(True)
 
 # ------------------------------------------------------------------
 # Create 10 jobs
@@ -59,7 +59,7 @@ cluster = Cluster(machines, jobs)
 # ------------------------------------------------------------------
 obs = cluster.step(0)
 screen = renderer.render(obs)
-sleep(1)
+sleep(5)
 print(screen)
 
 # sleep(5)
