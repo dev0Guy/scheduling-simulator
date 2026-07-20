@@ -1929,6 +1929,7 @@ name = "scheduling-simulator"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "gymnasium" },
     { name = "hypothesis" },
     { name = "numpy" },
     { name = "pygame" },
@@ -1964,6 +1965,7 @@ experiments = [
 
 [package.metadata]
 requires-dist = [
+    { name = "gymnasium", specifier = ">=1.3.0" },
     { name = "hypothesis", specifier = ">=6.156.6" },
     { name = "numpy", specifier = "==2.2.6" },
     { name = "pygame", specifier = ">=2.6.1" },

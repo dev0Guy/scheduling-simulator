@@ -50,17 +50,17 @@ cdef class Job:
 			status = "COMPLETED" # pragma: no cover
 		else: # pragma: no cover
 			status = f"UNKNOWN({<int>self.metadata.status})" # pragma: no cover
-		return (
-			f"Job("
-			f"shape=({self.usage.shape[0]}, {self.usage.shape[1]}), "
-			f"status={status}, "
-			f"arrival_time={self.metadata.arrival_time}, "
-			f"size={self.metadata.size}, "
-			f"ttl={self.metadata.ttl}, "
-			f"wait_time={self.metadata.wait_time}, "
-			f"scheduled_at={self.metadata.scheduled_at}, "
-			f"finished_at={self.metadata.finished_at}"
-			f")"
+		return ( # pragma: no cover
+			f"Job(" # pragma: no cover
+			f"shape=({self.usage.shape[0]}, {self.usage.shape[1]}), " # pragma: no cover
+			f"status={status}, " # pragma: no cover
+			f"arrival_time={self.metadata.arrival_time}, " # pragma: no cover
+			f"size={self.metadata.size}, " # pragma: no cover
+			f"ttl={self.metadata.ttl}, " # pragma: no cover
+			f"wait_time={self.metadata.wait_time}, " # pragma: no cover
+			f"scheduled_at={self.metadata.scheduled_at}, " # pragma: no cover
+			f"finished_at={self.metadata.finished_at}" # pragma: no cover
+			f")" # pragma: no cover
 		)# pragma: no cover
 
 	cpdef void update_status(self, JobStatus new_status, unsigned int time) except *:
