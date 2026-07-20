@@ -1,5 +1,3 @@
-from ast import Call
-
 from scheduling_simulator.core import Cluster
 from hypothesis import given, settings, HealthCheck, strategies as st
 from scheduling_simulator.core.job import JobStatus
@@ -53,7 +51,7 @@ def assert_changed_to_pending_in(observation: dict) -> None:
 
 def foward_time_by(
     cluster: Cluster, count: int, assert_func: Callable[[dict], None]
-) -> dict:
+) -> 'ObservationDict':
     observation = cluster.observation.to_dict()
     for _ in range(count):
         observation = cluster.step(0).to_dict()

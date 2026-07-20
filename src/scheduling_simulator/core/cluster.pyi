@@ -1,10 +1,10 @@
 from .machine import Machine
 from .job import Job
-from typing import List
+from typing import List, TypedDict
 import numpy as np
 import numpy.typing as npt
 
-class Observation:
+class ObservationDict(TypedDict):
     machines_usage: npt.NDArray[np.int32]
     jobs_usage: npt.NDArray[np.int32]
     status: npt.NDArray[np.int32]
@@ -13,7 +13,8 @@ class Observation:
     size: npt.NDArray[np.int32]
     time: int
 
-    def to_dict(self) -> dict: ...
+class Observation:
+    def to_dict(self) -> ObservationDict: ...
 
 class Cluster:
     observation: Observation

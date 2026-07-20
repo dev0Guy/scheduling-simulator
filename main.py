@@ -7,7 +7,7 @@ from scheduling_simulator.core.render import Renderer
 from time import sleep
 
 
-renderer = Renderer()
+renderer = Renderer(False)
 
 # ------------------------------------------------------------------
 # Create 10 jobs
@@ -19,9 +19,9 @@ jobs = []
 for i in range(10):
     usage = np.array(
         [
-            [2 + (i % 3)] * 10,
-            [3 + (i % 3)] * 10,
-            [4 + (i % 3)] * 10,
+            [50] * 10,
+            [100] * 10,
+            [70] * 10,
         ],
         dtype=np.int32,
     )
@@ -41,7 +41,7 @@ for i in range(10):
 # Shape = (3 resources, 10 time slots)
 # ------------------------------------------------------------------
 
-capacity = np.full((3, 10), 20, dtype=np.int32)
+capacity = np.full((3, 10), 250, dtype=np.int32)
 
 machines = [
     Machine(capacity.copy()),
@@ -51,20 +51,25 @@ machines = [
 
 cluster = Cluster(machines, jobs)
 
-print("-" * 80)
-print(cluster.observation.to_dict())
+# print("-" * 80)
+# print(cluster.observation.to_dict())
 
 # ------------------------------------------------------------------
 # Run one action per job
 # ------------------------------------------------------------------
+obs = cluster.step(0)
+screen = renderer.render(obs)
+sleep(1)
+print(screen)
 
-for action in range(len(jobs)):
-    obs = cluster.step(action)
-    renderer.render(obs)
-    sleep(1)
+# sleep(5)
+# for action in range(len(jobs)):
+#     obs = cluster.step(action)
+#     renderer.render(obs)
+#     sleep(2)
 
-# Final observation
-obs = cluster.observation
+# # Final observation
+# obs = cluster.observation
 
-renderer.render(obs)
-sleep(5)
+# renderer.render(obs)
+# sleep(5)

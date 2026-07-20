@@ -14,5 +14,8 @@ build:
 test:
 	CYTHON_TRACE=1 uv run pytest --cov=scheduling_simulator --cov-report=term-missing --cov-report=xml
 
+run: build
+	python main.py
+
 # Clean, then build from scratch -- use this whenever things feel stale.
 rebuild: clean build test

@@ -2,7 +2,6 @@ from .job cimport Job, JobStatus
 from .machine cimport Machine
 cimport numpy as cnp
 
-
 cdef struct Action:
     bint skip
     unsigned int selected_machine
