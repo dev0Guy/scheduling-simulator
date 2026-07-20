@@ -53,17 +53,16 @@ cdef class Cluster:
         ): # pragma: no cover
             raise ValueError(
                 "machines_usage and jobs_usage must have the same shape"
-            )
+            ) # pragma: no cover
 
-    # pragma: no cover
-    def __repr__(self):
+    def __repr__(self): # pragma: no cover
         return (
             f"Cluster(\n"
             f"  time={self.time},\n"
             f"  jobs={list(self.jobs)},\n"
             f"  machines={list(self.machines)}\n"
             f")"
-        )
+        ) # pragma: no cover
 
     cpdef Observation get_observation(self):
         return self.observation
