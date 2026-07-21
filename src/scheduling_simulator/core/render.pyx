@@ -3,20 +3,15 @@
 # cython: wraparound=False
 # cython: cdivision=True
 
-import pygame
 from .cluster cimport Observation
 from .job import JobStatus
 
+import pygame
+
 cimport cython
 
-cdef class Configuration:
-    cdef int width, height, cell_size, margin
-    cdef int cell_border_thickness
-    cdef int primary_title_font_size, secondary_title_font_size
-    cdef tuple main_text_color, secondary_text_color, bg_color
-    cdef int margin_between_machines,
-    cdef int pedding_top, title_under_pedding, job_border
 
+cdef class Configuration:
 
     def __init__(
         self,
@@ -50,6 +45,8 @@ cdef class Configuration:
         self.secondary_text_color = secondary_text_color
         self.bg_color = bg_color
 
+
+
 cdef Configuration DefulatConfiguration = Configuration(
     width=1400,
     height=700,
@@ -67,12 +64,8 @@ cdef Configuration DefulatConfiguration = Configuration(
     bg_color = (30, 30, 30)
 )
 
+
 cdef class Renderer:
-    cdef object screen
-    cdef Configuration config
-    cdef object font
-    cdef object small_font
-    cdef bint to_screen
 
     def __init__(self, bint to_screen = True, Configuration config = DefulatConfiguration):
         pygame.init()
@@ -100,10 +93,12 @@ cdef class Renderer:
         unsigned int y,
         unsigned int n_rows,
         unsigned int n_columns,
-        object text,
+        str text,
         bint active
     ):
-        cdef tuple color
+        cdef:
+            tuple color
+            object textrect
         self.screen.blit(
             self.font.render(text, True, self.config.main_text_color),
             (x, y)
@@ -122,12 +117,12 @@ cdef class Renderer:
                 )
                 color = self.cell_color(value) if active else (83, 92, 104)
                 pygame.draw.rect(self.screen, color , rect)
-                text = self.small_font.render(str(value), True, self.config.secondary_text_color)
-                text_rect = text.get_rect(
+                textrect = self.small_font.render(str(value), True, self.config.secondary_text_color)
+                text_rect = textrect.get_rect(
                     center=(rect[0] + self.config.cell_size // 2,
                     rect[1] + self.config.cell_size // 2)
                 )
-                self.screen.blit(text, text_rect)
+                self.screen.blit(textrect, text_rect)
 
 
     cdef void draw_machines(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height):
