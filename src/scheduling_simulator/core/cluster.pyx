@@ -204,3 +204,11 @@ cdef class Cluster:
 
         self.update_observation()
         return self.observation
+
+    cpdef bint has_all_jobs_been_completed(self):
+        cdef bint reduced = True
+
+        for job in self.jobs:
+            reduced &= job.metadata.status == JobStatus.COMPLETED
+
+        return reduced

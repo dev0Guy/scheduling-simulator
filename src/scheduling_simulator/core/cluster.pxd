@@ -36,3 +36,4 @@ cdef class Cluster:
     cpdef unsigned int allocation_to_action(self, unsigned int machine_idx, unsigned int job_idx)
     cpdef Observation step(self, unsigned int v)
     cpdef Observation get_observation(self)
+    cpdef bint has_all_jobs_been_completed(self)

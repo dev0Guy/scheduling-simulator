@@ -25,3 +25,4 @@ cdef class Renderer:
     cdef tuple _status_color(self, int status)
     cdef tuple _job_border_color(self, int status)
     cdef tuple cell_color(self, int value)
+    cdef int[:, ::1] diffrent_in(self, int[:, ::1] v1, int[:, ::1] v2)

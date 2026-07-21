@@ -6,6 +6,8 @@
 from .cluster cimport Observation
 from .job import JobStatus
 
+import numpy as np
+
 import pygame
 
 cimport cython
@@ -135,8 +137,20 @@ cdef class Renderer:
 
         for machine in range(n_machines):
             y = start_y + (machine * (height + self.config.primary_title_font_size + self.config.margin_between_machines))
-            self.draw_table(obs.machines_capacity[machine], start_x, y, n_resources, n_time, f"Machine {machine}:", True)
+            values = self.diffrent_in(obs.machines_capacity[machine], obs.machines_usage[machine])
+            self.draw_table(values, start_x, y, n_resources, n_time, f"Machine {machine}:", True)
 
+
+    cdef int[:, ::1] diffrent_in(self, int[:, ::1] v1, int[:, ::1] v2):
+        cdef:
+            unsigned int i, j
+            int[:, ::1] values = np.empty_like(np.asarray(v1))
+
+        for i in range(v1.shape[0]):
+            for j in range(v1.shape[1]):
+                values[i, j] = v1[i, j] - v2[i, j]
+
+        return values
 
     cdef void draw_jobs(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height):
 
