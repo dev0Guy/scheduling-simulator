@@ -208,7 +208,7 @@ cdef class Renderer:
         block_width = self.config.cell_size * n_time
         block_height = n_resources * self.config.cell_size
 
-        machine_horizntal_position = block_width // 2
+        machine_horizntal_position = 50 #block_width // 2
         job_horizntal_position =  machine_horizntal_position + block_width + self.config.margin
 
         self.draw_machines(obs, machine_horizntal_position, self.config.pedding_top, block_width, block_height)
@@ -229,7 +229,12 @@ cdef class Renderer:
         red = 255 - value
         green = value
 
-        return (red, green, 0)
+
+        return (
+            max(0, min(255, red)),
+            max(0, min(255, green)),
+            0,
+        )
 
     cdef tuple _status_color(self, int status):
         # Adjust these numbers if your status enum is different

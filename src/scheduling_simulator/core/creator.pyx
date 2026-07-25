@@ -53,7 +53,6 @@ cdef list[Job] deeprm_capcity_jobs(ClusterGenerationConfig config, object random
     return jobs
 
 
-
 cdef Cluster generate_cluster(
     ClusterGenerationConfig config,
     object random,

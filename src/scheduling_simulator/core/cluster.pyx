@@ -3,7 +3,7 @@ from .machine cimport Machine
 import numpy as np
 cimport numpy as cnp
 from cython cimport boundscheck, wraparound, initializedcheck
-
+import logging
 
 cdef class Observation:
 
@@ -200,7 +200,9 @@ cdef class Cluster:
         else:
             selected_machine = action.selected_machine
             selected_job = action.selected_job
-            self.allocate(selected_machine, selected_job)
+            allocation_succsued = self.allocate(selected_machine, selected_job)
+            if not allocation_succsued:
+                logging.info(f"Allocation Failed, job: '{selected_job}', machine: '{selected_machine}'")
 
         self.update_observation()
         return self.observation

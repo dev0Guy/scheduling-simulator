@@ -5,8 +5,7 @@ import numpy as np
 from scheduling_simulator.core import Job
 from hypothesis import given, strategies as st
 from scheduling_simulator.core.job import JobStatus
-from strategies import job_strategies
-
+from tests.test_core.strategies import job_strategies
 
 def assert_metadata(
     job: Job,

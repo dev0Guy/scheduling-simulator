@@ -2,8 +2,7 @@ from hypothesis import given, strategies as st
 
 from scheduling_simulator.core import Machine
 import numpy as np
-from strategies import machine_strategies, usage_for_machine
-
+from tests.test_core.strategies import machine_strategies, usage_for_machine
 
 @given(
     machine=machine_strategies(),

@@ -13,30 +13,40 @@ if TYPE_CHECKING:
 
 Information = dict
 RewardFunction = Callable[[Observation, Optional[Observation]], float]
+ClusterCreator = Callable[['ClusterGenerationConfig', np.random.Generator], Cluster]
 
 def defualt_reward_function(current_observation: Observation, prev_observation: Optional[Observation]) -> float:
     return -1
 
+def generate_deep_rm_cluster(config: 'ClusterGenerationConfig', random: np.random.Generator) -> Cluster:
+    return generate_cluster_python(config, random)
+
+
 class SchedulingEnviorment(gym.Env['ObservationDict', int]):
     _config: 'ClusterGenerationConfig'
     _renderer: Renderer
+    _creator: ClusterCreator
     _last_observation: Optional[Observation]
     _cluster: Cluster
     _rewarder: RewardFunction
+
+    metadata = {'render_modes': ['rgb_array', 'huamn']}
 
     def __init__(
         self,
         config: 'ClusterGenerationConfig',
         reward_function: RewardFunction = defualt_reward_function,
+        creator: ClusterCreator = generate_deep_rm_cluster,
         render_mode: Literal['human', 'rgb_array'] = 'human',
     ) -> None:
         super().__init__()
         self._config = config
         self._reward_function = reward_function
         self._renderer = Renderer(render_mode == 'human')
+        self._creator = creator
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple['ObservationDict', Information]:
-        self._cluster = generate_cluster_python(self._config, np.random.default_rng(seed))
+        self._cluster = self._creator(self._config, np.random.default_rng(seed))
         self._last_observation = self._cluster.get_observation()
         return self._last_observation.to_dict(), {}
 

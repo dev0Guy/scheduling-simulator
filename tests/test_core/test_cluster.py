@@ -1,34 +1,43 @@
 from scheduling_simulator.core import Cluster
 from hypothesis import given, settings, HealthCheck, strategies as st
 from scheduling_simulator.core.job import JobStatus
-from strategies import cluster_strategies
+from tests.test_core.strategies import cluster_strategies
 from typing import Callable
+from typing import TYPE_CHECKING
 import numpy as np
 
+if TYPE_CHECKING:
+    from scheduling_simulator.core.cluster import ObservationDict
 
-def does_cluster_has_job_with_status(*, status: JobStatus) -> Callable[[Cluster], bool]:
+
+
+def extract_observation_from_cluster_for_filter(func: Callable[['ObservationDict'], bool]):
     def inner(cluster: Cluster) -> bool:
         observation = cluster.get_observation().to_dict()
+        return func(observation)
+    return inner
+
+
+def does_cluster_has_job_with_status(*, status: JobStatus) -> Callable[['ObservationDict'], bool]:
+    def inner(observation: 'ObservationDict') -> bool:
         return bool(np.any(observation["status"] == status))
 
     return inner
 
 
-def get_possible_allocation_foreach_job(cluster: Cluster) -> np.ndarray:
-    observation = cluster.get_observation().to_dict()
+def get_possible_allocation_foreach_job(observation: 'ObservationDict') -> np.ndarray:
     return np.all(
         observation["machines_capacity"][:, None, :, :]
         >= observation["jobs_usage"][None, :, :, :],
         axis=(2, 3),
     )
 
-def has_scheduled_job_with(status: JobStatus, scheduble: bool = True) -> Callable[[Cluster], bool]:
+def has_scheduled_job_with(status: JobStatus, scheduble: bool = True) -> Callable[['ObservationDict'], bool]:
 
-    def inner(cluster: Cluster) -> bool:
-        obs = cluster.get_observation().to_dict()
-        compatible = get_possible_allocation_foreach_job(cluster)
+    def inner(observation: 'ObservationDict') -> bool:
+        compatible = get_possible_allocation_foreach_job(observation)
 
-        has_status = obs["status"] == status
+        has_status = observation["status"] == status
         runnable = compatible.any(axis=0)
         if scheduble:
              return bool(np.any(has_status & runnable))
@@ -37,11 +46,12 @@ def has_scheduled_job_with(status: JobStatus, scheduble: bool = True) -> Callabl
 
     return inner
 
-def does_cluster_can_run_all_jobs(cluster: Cluster) -> bool:
-    compatible = get_possible_allocation_foreach_job(cluster)
+def does_cluster_can_run_all_jobs(observation: 'ObservationDict') -> bool:
+    compatible = get_possible_allocation_foreach_job(observation)
     return bool(compatible.any(axis=0).all())
 
-def assert_changed_to_pending_in(observation: dict) -> None:
+
+def assert_changed_to_pending_in(observation: 'ObservationDict') -> None:
     time = observation["time"]
     for status, arrival in zip(observation["status"], observation["arrival"]):
         already_started = status == 1 and arrival <= time
@@ -50,7 +60,7 @@ def assert_changed_to_pending_in(observation: dict) -> None:
 
 
 def foward_time_by(
-    cluster: Cluster, count: int, assert_func: Callable[[dict], None]
+    cluster: Cluster, count: int, assert_func: Callable[['ObservationDict'], None]
 ) -> 'ObservationDict':
     observation = cluster.observation.to_dict()
     for _ in range(count):
@@ -60,7 +70,7 @@ def foward_time_by(
 
 def assert_allocation_has_enogh_space(cluster: Cluster, before_status: JobStatus, after_status: JobStatus) -> int:
     observation = cluster.get_observation().to_dict()
-    compatible = get_possible_allocation_foreach_job(cluster)
+    compatible = get_possible_allocation_foreach_job(observation)
     has_status =  observation["status"] == before_status
     job_idx = np.flatnonzero(compatible.any(axis=0) & has_status)[0]
     assert observation["status"][job_idx] == before_status
@@ -91,14 +101,14 @@ def test_action_conversion(cluster: Cluster, row: st.DataObject) -> None:
 @settings(deadline=None)
 def test_cluster_foward_time_untill_all_jobs_pending(cluster: Cluster) -> None:
     observation = cluster.get_observation().to_dict()
-    max_job_arrival_time = np.max(observation["arrival"])
+    max_job_arrival_time: int = np.max(observation["arrival"]) # type: ignore
     assert_changed_to_pending_in(observation)
     foward_time_by(cluster, max_job_arrival_time, assert_changed_to_pending_in)
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
-    .filter(does_cluster_has_job_with_status(status=JobStatus.NOT_CREATED))
-    .filter(does_cluster_can_run_all_jobs)
+    .filter(extract_observation_from_cluster_for_filter(does_cluster_has_job_with_status(status=JobStatus.NOT_CREATED)))
+    .filter(extract_observation_from_cluster_for_filter(does_cluster_can_run_all_jobs))
 )
 @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 def test_single_not_created_job_untill_completion(cluster: Cluster) -> None:
@@ -113,7 +123,7 @@ def test_single_not_created_job_untill_completion(cluster: Cluster) -> None:
     observation = cluster.get_observation().to_dict()
     assert observation["status"][job_not_created_idx] == 1
 
-    compatible = get_possible_allocation_foreach_job(cluster)
+    compatible = get_possible_allocation_foreach_job(observation)
 
     selected_machine = [
         np.flatnonzero(compatible[:, j]) for j in range(compatible.shape[1])
@@ -136,12 +146,12 @@ def test_single_not_created_job_untill_completion(cluster: Cluster) -> None:
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
-    .filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=False))
+    .filter(extract_observation_from_cluster_for_filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=False)))
 )
 @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 def test_allocation_of_pending_job_with_no_space(cluster: Cluster) -> None:
     observation = cluster.get_observation().to_dict()
-    compatible = get_possible_allocation_foreach_job(cluster)
+    compatible = get_possible_allocation_foreach_job(observation)
     job_idx = np.flatnonzero(~compatible.any(axis=0) & observation["status"] == JobStatus.PENDING)[0]
     assert observation["status"][job_idx] == JobStatus.PENDING
 
@@ -159,7 +169,7 @@ def test_allocation_of_pending_job_with_no_space(cluster: Cluster) -> None:
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
-    .filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=True))
+    .filter(extract_observation_from_cluster_for_filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=True)))
 )
 @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 def test_allocation_of_pending_job_with_enough_space(cluster: Cluster) -> None:
@@ -167,7 +177,7 @@ def test_allocation_of_pending_job_with_enough_space(cluster: Cluster) -> None:
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10, min_arrival_time=1)
-    .filter(has_scheduled_job_with(JobStatus.NOT_CREATED, scheduble=True))
+    .filter(extract_observation_from_cluster_for_filter(has_scheduled_job_with(JobStatus.NOT_CREATED, scheduble=True)))
 )
 @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 def test_allocation_of_not_created_job_with_enough_space(cluster: Cluster) -> None:
@@ -175,7 +185,7 @@ def test_allocation_of_not_created_job_with_enough_space(cluster: Cluster) -> No
 
 @given(
     cluster_strategies(n_machines=2, n_jobs=8, max_resources=3, max_time=10)
-    .filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=True))
+    .filter(extract_observation_from_cluster_for_filter(has_scheduled_job_with(JobStatus.PENDING, scheduble=True)))
 )
 @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow], deadline=None)
 def test_allocation_of_running_job_with_enough_space(cluster: Cluster) -> None:

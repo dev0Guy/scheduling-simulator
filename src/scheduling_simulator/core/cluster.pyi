@@ -6,10 +6,11 @@ import numpy.typing as npt
 
 class ObservationDict(TypedDict):
     machines_usage: npt.NDArray[np.int32]
+    machines_capacity: npt.NDArray[np.int32]
     jobs_usage: npt.NDArray[np.int32]
     status: npt.NDArray[np.int32]
     ttl: npt.NDArray[np.int32]
-    arrival_time: npt.NDArray[np.int32]
+    arrival: npt.NDArray[np.int32]
     size: npt.NDArray[np.int32]
     time: int
 

@@ -95,6 +95,8 @@ def cluster_strategies(
     n_machines: int = 5,
     min_arrival_time: int = 0,
     max_arrival_time: int = 100,
+    max_job_usage: int = 255,
+    min_job_usage: int = 1,
     **kwargs: Unpack[ResourceThrowTimeStrategy],
 ) -> Cluster:
     kwargs: ResourceThrowTimeStrategy = {**DEFAULT_CONSTRAINTS, **kwargs}
@@ -107,7 +109,9 @@ def cluster_strategies(
     kwargs["min_time"] = kwargs["max_time"] = number_of_time
 
     ## TODO make sure the capacity is bigger than all max job usage
-
+    machines = [draw(machine_strategies(**kwargs)) for _ in range(n_machines)]
+    kwargs["max_capacity"] = max_job_usage
+    kwargs["min_capacity"] = min_job_usage
     jobs = [
         draw(
             job_strategies(
@@ -118,5 +122,4 @@ def cluster_strategies(
         )
         for _ in range(n_jobs)
     ]
-    machines = [draw(machine_strategies(**kwargs)) for _ in range(n_machines)]
     return Cluster(machines, jobs)
