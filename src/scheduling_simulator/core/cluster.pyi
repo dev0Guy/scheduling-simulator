@@ -11,8 +11,12 @@ class ObservationDict(TypedDict):
     status: npt.NDArray[np.int32]
     ttl: npt.NDArray[np.int32]
     arrival: npt.NDArray[np.int32]
+    wait_time: npt.NDArray[np.int32]
+    scheduled_at: npt.NDArray[np.int32]
+    finished_at: npt.NDArray[np.int32]
     size: npt.NDArray[np.int32]
     time: int
+    action_success: bool
 
 class Observation:
     def to_dict(self) -> ObservationDict: ...

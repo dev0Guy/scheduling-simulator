@@ -163,6 +163,7 @@ def test_allocation_of_pending_job_with_no_space(cluster: Cluster) -> None:
     action = cluster.allocation_to_action(machine_idx, job_idx)
     observation = cluster.step(action).to_dict()
 
+    assert not observation["action_success"]
     assert observation["status"][job_idx] == JobStatus.PENDING, (
         "Selected job is not PENDING. The test requires a pending job that cannot fit on any machine."
     )

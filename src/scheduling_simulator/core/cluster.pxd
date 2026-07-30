@@ -16,7 +16,11 @@ cdef class Observation:
     cdef int[::1] ttl
     cdef int[::1] arrival_time
     cdef int[::1] size
+    cdef int[::1] wait_time
+    cdef int[::1] scheduled_at
+    cdef int[::1] finished_at
     cdef unsigned int time
+    cdef bint action_success
 
     cpdef dict to_dict(self)
 

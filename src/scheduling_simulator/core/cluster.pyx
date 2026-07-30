@@ -17,7 +17,12 @@ cdef class Observation:
         self.ttl = np.empty(n_jobs, dtype=np.int32)
         self.arrival_time = np.empty(n_jobs, dtype=np.int32)
         self.size = np.empty(n_jobs, dtype=np.int32)
+        self.wait_time = np.empty(n_jobs, dtype=np.int32) - 1
+        self.scheduled_at = np.empty(n_jobs, dtype=np.int32) - 1
+        self.finished_at = np.empty(n_jobs, dtype=np.int32) - 1
+
         self.time = 0
+        self.action_success = True
 
         self.machines_usage = machines_usage
         self.jobs_usage = jobs_usage
@@ -27,12 +32,16 @@ cdef class Observation:
         return {
             'machines_usage': np.asarray(self.machines_usage),
             'machines_capacity': np.asarray(self.machines_capacity),
+            'wait_time': np.asarray(self.wait_time),
+            'scheduled_at': np.asarray(self.scheduled_at),
+            'finished_at': np.asarray(self.finished_at),
             'jobs_usage': np.asarray(self.jobs_usage),
             'status': np.asarray(self.status),
             'arrival': np.asarray(self.arrival_time),
             'ttl': np.asarray(self.ttl),
             'size': np.asarray(self.size),
-            'time': self.time
+            'time': self.time,
+            'action_success': self.action_success
         }
 
 cdef class Cluster:
@@ -114,8 +123,12 @@ cdef class Cluster:
             int[:, :, ::1] machine_usage = self.observation.machines_usage
             int[:, :, ::1] job_usage = self.observation.jobs_usage
             int[::1] status = self.observation.status
-            int[::] ttl = self.observation.ttl
-            int[::] arrival_time = self.observation.arrival_time
+            int[::1] ttl = self.observation.ttl
+            int[::1] arrival_time = self.observation.arrival_time
+            int[::1] wait_time = self.observation.wait_time
+            int[::1] scheduled_at = self.observation.scheduled_at
+            int[::1] finished_at = self.observation.finished_at
+
             int[::] size = self.observation.size
 
 
@@ -127,6 +140,9 @@ cdef class Cluster:
             status[i] = job.metadata.status
             ttl[i] = job.metadata.ttl
             arrival_time[i] = job.metadata.arrival_time
+            wait_time[i] = job.metadata.wait_time
+            scheduled_at[i] = job.metadata.scheduled_at
+            finished_at[i] = job.metadata.finished_at
             size[i] = job.metadata.size
             for r in range(job.usage.shape[0]):
                 for t in range(job.usage.shape[1]):
@@ -190,10 +206,13 @@ cdef class Cluster:
         return 1 + machine_idx * self.jobs.shape[0] + job_idx
 
     cpdef Observation step(self, unsigned int v):
+
         cdef:
             Action action = self.action_from(v)
             unsigned int selected_machine
             unsigned int selected_job
+
+        self.observation.action_success = True
 
         if action.skip:
             self.foward_time()
@@ -202,6 +221,7 @@ cdef class Cluster:
             selected_job = action.selected_job
             allocation_succsued = self.allocate(selected_machine, selected_job)
             if not allocation_succsued:
+                self.observation.action_success = False
                 logging.info(f"Allocation Failed, job: '{selected_job}', machine: '{selected_machine}'")
 
         self.update_observation()

@@ -15,7 +15,7 @@ from tests.test_core.test_cluster import does_cluster_can_run_all_jobs, extract_
 from tests.test_envioremnt.strategies import scheduling_enviorment_strategy
 
 def assert_tick_untill_job_arrival_time_with_correct_status(env: SchedulingEnviorment, observation: 'ObservationDict', job_idx: int) -> 'ObservationDict':
-    time_untill_arrival = observation['arrival'][job_idx] - observation['time']
+    time_untill_arrival = int(observation['arrival'][job_idx] - observation['time'])
     assert observation['status'][job_idx] == JobStatus.NOT_CREATED
     for _ in range(time_untill_arrival):
         assert observation['status'][job_idx] == JobStatus.NOT_CREATED
@@ -35,7 +35,8 @@ def assert_job_allocation_with_correct_usage_and_status(env: SchedulingEnviormen
     return observation
 
 def assert_run_job_untill_completion_with_correct_status(env: SchedulingEnviorment, observation: 'ObservationDict', job_idx: int) -> 'ObservationDict':
-    for _ in range(observation['ttl'][job_idx]):
+    ttl = int(observation['ttl'][job_idx])
+    for _ in range(ttl):
         observation, *_ = env.step(0)
         env.render()
 
@@ -135,7 +136,7 @@ def test_cluster_half_job_to_machine_run_all_jobs_untill_completion(env: Schedul
 
         observation = assert_job_allocation_with_correct_usage_and_status(env, observation, machine_idx, job_idx)
 
-    max_ttl = np.max(observation['ttl'])
+    max_ttl = int(np.max(observation['ttl']))
     for _ in range(max_ttl):
         observation, *_ = env.step(0)
         env.render()
