@@ -40,9 +40,10 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         render_mode: Literal['human', 'rgb_array'] = 'human',
     ) -> None:
         super().__init__()
+        self.render_mode = render_mode
         self._config = config
         self._reward_function = reward_function
-        self._renderer = Renderer(render_mode == 'human')
+        self._renderer = Renderer(self.render_mode == 'human')
         self._creator = creator
         self.observation_space = gym.spaces.Dict(self._create_observation_space())
         n_actions = 1 + (self._config['n_jobs'] * self._config['n_machines'])

@@ -19,6 +19,7 @@ def assert_tick_untill_job_arrival_time_with_correct_status(env: SchedulingEnvio
     assert observation['status'][job_idx] == JobStatus.NOT_CREATED
     for _ in range(time_untill_arrival):
         assert observation['status'][job_idx] == JobStatus.NOT_CREATED
+        assert np.all(observation['machines_usage'] <= observation['machines_capacity'])
         observation, *_ = env.step(0)
         env.render()
     assert observation['status'][job_idx] == JobStatus.PENDING
@@ -32,6 +33,7 @@ def assert_job_allocation_with_correct_usage_and_status(env: SchedulingEnviormen
 
     assert (observation['status'][job_idx] == JobStatus.RUNNING)
     np.testing.assert_equal(observation['machines_usage'][machine_idx], original_usage + observation['jobs_usage'][job_idx])
+    assert np.all(observation['machines_usage'] <= observation['machines_capacity'])
     return observation
 
 def assert_run_job_untill_completion_with_correct_status(env: SchedulingEnviorment, observation: 'ObservationDict', job_idx: int) -> 'ObservationDict':
