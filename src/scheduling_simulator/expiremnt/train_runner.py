@@ -1,18 +1,16 @@
-from stable_baselines3 import DQN
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import CallbackList
 import wandb
 import typing as tp
 import gymnasium as gym
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
+from stable_baselines3.common.vec_env import DummyVecEnv
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
-from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from wandb.integration.sb3 import WandbCallback
 
-import glob
-
-from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
+from scheduling_simulator.expiremnt.policy import SchedulingPolicy, get_auto_device
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -34,23 +32,35 @@ class TrainExperimentRunner:
 
     def run(self) -> None:
         env = self.generate_enviroemnt()
+        eval_env = self.generate_enviroemnt()
+        eval_env.seed(10_000)
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
-        model = DQN(
-            "MultiInputPolicy",
+        model = MaskablePPO(
+            SchedulingPolicy,
             env,
-            learning_rate=1e-3,
-            buffer_size=10_000,
-            learning_starts=100,
-            batch_size=32,
-            gamma=0.99,
-            train_freq=1,
-            target_update_interval=250,
+            learning_rate=lambda progress: 1e-4 * progress,
+            n_steps=512,
+            batch_size=64,
+            gamma=1.0,
+            gae_lambda=0.95,
+            ent_coef=0.02,
+            n_epochs=4,
+            max_grad_norm=0.5,
             verbose=1,
+            device=get_auto_device(),
             tensorboard_log=f"runs/{self._run.id}"
         )
         model.learn(50_000, callback=CallbackList([
+                    MaskableEvalCallback(
+                        eval_env,
+                        best_model_save_path=f"models/{self._run.id}",
+                        log_path=f"models/{self._run.id}",
+                        eval_freq=5_000,
+                        n_eval_episodes=32,
+                        deterministic=True,
+                    ),
                     WandbCallback(
                         gradient_save_freq=1_000,
                         model_save_path=f"models/{self._run.id}",
@@ -58,24 +68,19 @@ class TrainExperimentRunner:
                     ),
                     CustomMetricsCallback()
                 ]))
+        model = MaskablePPO.load(f"models/{self._run.id}/best_model", env=env)
         model.save(f"models/{self._run.id}/final_model")
         model_path = f"models/{self._run.id}/final_model.zip"
         wandb.save(model_path)
-        for f in glob.glob(f"videos/{self._run.id}/*.mp4"):
-            wandb.log({"video": wandb.Video(f, fps=30, format="mp4")})
         env.close()
+        eval_env.close()
         wandb.finish()
 
     def generate_enviroemnt(self):
         envs = DummyVecEnv([lambda: Monitor(
-            FailureSkipTimeWrapper(
-                SchedulingEnviorment(self.config, render_mode='rgb_array'), max_time=500)
+            gym.wrappers.TimeLimit(
+                SchedulingEnviorment(self.config, render_mode='rgb_array'),
+                max_episode_steps=500,
             )
-        ])
-        envs = VecVideoRecorder(
-            envs,
-            f"videos/{self._run.id}",
-            record_video_trigger=lambda x: x % 2_000 == 0,
-            video_length=200,
-        )
+        )])
         return envs

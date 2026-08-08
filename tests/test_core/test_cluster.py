@@ -1,4 +1,5 @@
 from scheduling_simulator.core import Cluster
+from scheduling_simulator.core.creator import generate_cluster_python
 from hypothesis import given, settings, HealthCheck, strategies as st
 from scheduling_simulator.core.job import JobStatus
 from tests.test_core.strategies import cluster_strategies
@@ -200,3 +201,22 @@ def test_allocation_of_running_job_with_enough_space(cluster: Cluster) -> None:
 def test_full_scheduling_with_random_scheduler(cluster: Cluster) -> None:
     # TODO: add random scheduler and make sure capable
     pass
+
+
+def test_default_creator_generates_scheduling_tradeoffs() -> None:
+    config = {
+        'n_machines': 1,
+        'n_jobs': 20,
+        'n_resource': 1,
+        'n_time': 10,
+        'max_capacity': 255,
+    }
+    cluster = generate_cluster_python(config, np.random.default_rng(0))
+    observation = cluster.get_observation().to_dict()
+
+    assert np.unique(observation['size']).size > 1
+    assert np.unique(observation['arrival']).size > 1
+    assert np.any(
+        observation['jobs_usage'][:, None] + observation['jobs_usage'][None, :]
+        <= observation['machines_capacity'][0]
+    )

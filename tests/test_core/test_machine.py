@@ -15,7 +15,9 @@ def test_machine_allocation_with_usage_bigger_than_capacity(
     c = row.draw(st.integers(0, machine.capacity.shape[1] - 1))
     usage = np.zeros_like(machine.capacity)
     usage[r, c] = machine.capacity[r, c] + 1
+    original_usage = np.asarray(machine.usage).copy()
     assert not machine.add_usage(usage)
+    np.testing.assert_array_equal(np.asarray(machine.usage), original_usage)
 
 
 @given(
