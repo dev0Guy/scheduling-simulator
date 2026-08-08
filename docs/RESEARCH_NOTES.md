@@ -376,3 +376,44 @@ which helps on unseen sizes but may over-regularize at training size.
 4. Non-greedy job selection: The learned policy doesn't always pick
    the shortest job — it considers machine availability and future
    arrivals, not just duration.
+
+## Commit History
+
+- 944d0ac: Fix simulator bugs, add attention policy, generalization benchmark
+  (17 files, 1406 insertions, 93 deletions)
+
+## Current Benchmark Configuration
+
+The best configuration to date:
+- 3 machines, 1 resource, 20 time steps, max_capacity=255
+- max_n_jobs=48, training on [16, 20, 24, 28, 32, 36, 40]
+- MaskablePPO with PointerFeaturesExtractor (self+cross attention)
+- AdamW wd=0.01, lr=3e-4, gamma=1.0, gae_lambda=0.95
+- n_epochs=4, ent_coef=0.02, max_grad_norm=0.5
+- Early stopping: 128 val seeds, patience=3
+- LR scheduling: 3e-4 -> 1e-5 after 50% training
+- Clip scheduling: 0.2 -> 0.1 after 50% training
+- Randomized training seeds per episode
+
+## Performance Benchmarks
+
+| Component | Speed |
+|-----------|-------|
+| Env step (after np.pad fix) | 30,455 steps/s |
+| Full training loop | ~550 steps/s |
+| MPS (Apple GPU) | 17 steps/s (slower than CPU) |
+| Model size | ~50K parameters |
+
+## Multi-Seed Evaluation (E6, 2026-08-09)
+
+3 training seeds on 3-machine config, train [16-40], test [28, 36, 44].
+
+| Jobs | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
+|------|--------|--------|--------|------|-----|
+| 28 | -6.4% | -2.6% | -6.5% | -5.2% | 1.82 |
+| 36 | -7.5% | -6.8% | -7.7% | -7.3% | 0.39 |
+| 44 | -8.6% | -8.4% | -8.7% | -8.6% | 0.12 |
+
+The learned policy consistently beats SJF across all seeds. Variance is
+low at larger sizes (std < 0.4). The gap widens with problem size,
+confirming the policy learns increasingly valuable scheduling strategies.
