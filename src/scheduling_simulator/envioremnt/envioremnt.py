@@ -48,6 +48,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         self.observation_space = gym.spaces.Dict(self._create_observation_space())
         n_actions = 1 + (self._config['n_jobs'] * self._config['n_machines'])
         self.action_space = gym.spaces.Discrete(n_actions)
+        self._last_action = (0, 0, 0)
 
     def _create_observation_space(self) -> dict:
         n_jobs = self._config['n_jobs']
@@ -57,7 +58,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         return {
             'machines_usage': gym.spaces.Box(low=0, high=255, shape=(n_machines, n_resources, n_time), dtype=np.int32),
             'machines_capacity': gym.spaces.Box(low=0, high=255, shape=(n_machines, n_resources, n_time), dtype=np.int32),
-            'jobs_usage': gym.spaces.Box(low=0, high=255, shape=(n_jobs, n_resources, n_time), dtype=np.int32),
+            'jobs_usage': gym.spaces.Box(low=0, high=256, shape=(n_jobs, n_resources, n_time), dtype=np.int32),
             'status': gym.spaces.Box(low=0, high=5, shape=(n_jobs,), dtype=np.int32),
             'ttl': gym.spaces.Box(low=0, high=np.inf, shape=(n_jobs,), dtype=np.float32),
             'arrival': gym.spaces.Box(low=0, high=n_time, shape=(n_jobs,), dtype=np.float32),
@@ -86,13 +87,14 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
             'action_success': int(observation_dict['action_success'])
         }
 
-
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple['ObservationDict', Information]:
         self._cluster = self._creator(self._config, np.random.default_rng(seed))
         self._last_observation = self._cluster.get_observation()
+        self._last_action = (0, 0, 0)
         return self._cast(self._last_observation), {}
 
     def step(self, action: int) -> tuple['ObservationDict', float, bool, bool, Information]:
+        self._last_action = self._cluster.action_to_value(action)
         previous_observation = self._last_observation
         self._last_observation = self._cluster.step(action)
         reward = self._reward_function(self._last_observation, previous_observation)
@@ -104,7 +106,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         if self._last_observation is None:
             return None
 
-        return self._renderer.render(self._last_observation)
+        return self._renderer.render(self._last_observation, self._last_action)
 
     def close(self) -> None:
         self._renderer.close()

@@ -15,6 +15,7 @@ class EpisodesMetrics(TypedDict):
     current_time: List[float]
     allocations: List[int]
     failed_allocations: List[int]
+    completion_time: List[int]
 
 
 class CustomMetricsCallback(BaseCallback):
@@ -35,6 +36,7 @@ class CustomMetricsCallback(BaseCallback):
             max_wait_time=[],
             current_time=[],
             failed_allocations=[],
+            completion_time = []
         )
 
     def _update_episode_metrics(self):
@@ -72,12 +74,14 @@ class CustomMetricsCallback(BaseCallback):
             }
 
             wait_time = np.asarray(obs_source["wait_time"], dtype=np.float32)
+            size = np.asarray(obs_source["size"], dtype=np.float32)
             status = np.asarray(obs_source["status"], dtype=np.int32)
             current_time = float(np.asarray(obs_source["time"]).squeeze())
 
             self.episode_metrics["avg_wait_time"].append(np.average(wait_time))
             self.episode_metrics["max_wait_time"].append(np.max(wait_time))
             self.episode_metrics["current_time"].append(current_time)
+            self.episode_metrics["completion_time"].append(np.average(wait_time + size))
 
             allocations = int(np.sum(status != JobStatus.PENDING))
             self.episode_metrics["allocations"].append(allocations)
@@ -99,6 +103,8 @@ class CustomMetricsCallback(BaseCallback):
                 "episode/avg_wait_time": self.episode_metrics["avg_wait_time"][idx],
                 "episode/time": self.episode_metrics["current_time"][idx],
                 "episode/failed_allocations": np.sum(self.episode_metrics["failed_allocations"]),
+                "episode/avg_completion_time": self.episode_metrics["completion_time"][idx]
+
             })
 
         self._update_episode_metrics()

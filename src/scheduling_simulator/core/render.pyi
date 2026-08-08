@@ -28,5 +28,5 @@ class Configuration:
 
 class Renderer:
     def __init__(self, to_screen: bool = True, config: Configuration = DefulatConfiguration)
-    def render(self, obs: Observation) -> Optional[np.ndarray]
+    def render(self, obs: Observation, last_action: tuple[int, int, int]) -> Optional[np.ndarray]
     def close(self) -> None

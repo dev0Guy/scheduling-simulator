@@ -17,10 +17,10 @@ cdef class Renderer:
     cdef bint to_screen
 
 
-    cpdef object render(self, Observation obs)
+    cpdef object render(self, Observation obs, tuple last_action)
     cpdef close(self)
-    cdef void draw_jobs(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height)
-    cdef void draw_machines(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height)
+    cdef void draw_jobs(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height, int selected_job)
+    cdef void draw_machines(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height, int selected_machine)
     cdef void draw_table(self, int[:, ::1] values,unsigned int x,unsigned int y,unsigned int n_rows,unsigned int n_columns, str text, bint active)
     cdef tuple _status_color(self, int status)
     cdef tuple _job_border_color(self, int status)

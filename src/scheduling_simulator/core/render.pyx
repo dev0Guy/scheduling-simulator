@@ -127,7 +127,7 @@ cdef class Renderer:
                 self.screen.blit(textrect, text_rect)
 
 
-    cdef void draw_machines(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height):
+    cdef void draw_machines(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height, int selected_machine):
         cdef unsigned int n_machines, n_resources, n_time
         cdef unsigned int y
 
@@ -138,6 +138,14 @@ cdef class Renderer:
         for machine in range(n_machines):
             y = start_y + (machine * (height + self.config.primary_title_font_size + self.config.margin_between_machines))
             values = self.diffrent_in(obs.machines_capacity[machine], obs.machines_usage[machine])
+            rect = (
+                start_x - (self.config.job_border // 2),
+                y + self.config.primary_title_font_size + self.config.title_under_pedding - (self.config.job_border // 2),
+                width + self.config.job_border,
+                height + self.config.job_border
+            )
+            color = (150, 150, 150) if machine != selected_machine else (0,0,205)
+            pygame.draw.rect(self.screen, color , rect)
             self.draw_table(values, start_x, y, n_resources, n_time, f"Machine {machine}:", True)
 
 
@@ -152,7 +160,7 @@ cdef class Renderer:
 
         return values
 
-    cdef void draw_jobs(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height):
+    cdef void draw_jobs(self, Observation obs, unsigned int start_x, unsigned int start_y, unsigned int width, unsigned int height, int selected_job):
 
         cdef unsigned int n_jobs, n_resources, n_time
         cdef unsigned int block_width, block_height
@@ -173,7 +181,8 @@ cdef class Renderer:
                 width + self.config.job_border,
                 height + self.config.job_border
             )
-            pygame.draw.rect(self.screen, self._status_color(obs.status[job]), rect)
+            color = self._status_color(obs.status[job]) if job != selected_job else (0,0,205)
+            pygame.draw.rect(self.screen, color , rect)
             self.draw_table(obs.jobs_usage[job], x, y, n_resources, n_time, f"Job {job}:", obs.status[job] == JobStatus.PENDING)
 
             meta_text = self.small_font.render(
@@ -185,7 +194,7 @@ cdef class Renderer:
             meta_y = y + height + self.config.margin_between_machines - (self.config.secondary_title_font_size // 2) + 1
             self.screen.blit(meta_text, (x, meta_y))
 
-    cpdef object render(self, Observation obs):
+    cpdef object render(self, Observation obs, tuple last_action):
         cdef:
             unsigned int block_width, block_height
             unsigned int n_resources, n_time
@@ -197,6 +206,9 @@ cdef class Renderer:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return
+
+        selected_machine = -1 if last_action[0] != 0 else last_action[1]
+        selected_job = -1 if last_action[0] != 0 else last_action[2]
 
         self.screen.fill(self.config.bg_color)
         text = self.font.render(f"Time : {obs.time}", True, self.config.main_text_color)
@@ -211,8 +223,8 @@ cdef class Renderer:
         machine_horizntal_position = 50 #block_width // 2
         job_horizntal_position =  machine_horizntal_position + block_width + self.config.margin
 
-        self.draw_machines(obs, machine_horizntal_position, self.config.pedding_top, block_width, block_height)
-        self.draw_jobs(obs, job_horizntal_position, self.config.pedding_top, block_width, block_height)
+        self.draw_machines(obs, machine_horizntal_position, self.config.pedding_top, block_width, block_height, selected_machine)
+        self.draw_jobs(obs, job_horizntal_position, self.config.pedding_top, block_width, block_height, selected_job)
 
         if not self.to_screen:
             return pygame.surfarray.array3d(self.screen).transpose((1, 0, 2))

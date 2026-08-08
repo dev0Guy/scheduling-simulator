@@ -1,35 +1,30 @@
 from collections import defaultdict
-from stable_baselines3 import DQN
-from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
+from stable_baselines3.common.monitor import Monitor
 import wandb
 import typing as tp
 import numpy as np
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
-from wandb.integration.sb3 import WandbCallback
 
 import glob
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
-from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
+from scheduling_simulator.scheduler.random_scheduler import RandomScheduler
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.cluster import ObservationDict
     from scheduling_simulator.core.creator import ClusterGenerationConfig
 
 
-class ExperimentRunner:
+class RandomBaselineRunner:
 
     def __init__(
         self,
         config: 'ClusterGenerationConfig',
-        train_steps: int,
         evalution_steps: int,
-        policy_kwargs: dict,
         max_time: int = 250,
+        seed: int = 42,
     ) -> None:
         self.config = config
         self._run = wandb.init(
@@ -38,67 +33,42 @@ class ExperimentRunner:
             monitor_gym=True,
             save_code=True,
         )
-        self.train_steps = train_steps
         self.evalution_steps = evalution_steps
-        self.policy_kwargs = policy_kwargs
         self.max_time = max_time
+        self.seed = seed
+        self.scheduler = RandomScheduler(rng=np.random.default_rng(seed))
 
     def run(self) -> None:
-        env = self.generate_enviroemnt(f"videos/{self._run.id}")
+        env = self.generate_enviroemnt(f"videos/evaluation/{self._run.id}")
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
-        print("Training")
-        model = self._train(env)
-        self._evaluate(model, n_episodes=self.evalution_steps)
+        print("Evaluating random baseline")
+        self._evaluate(env, n_episodes=self.evalution_steps)
         env.close()
         wandb.finish()
 
+    def _encode_action(self, skip: bool, dim1: int, dim2: int, n_dim2: int) -> int:
+        if skip:
+            return 0
+        return 1 + dim1 * n_dim2 + dim2
 
-    def _train(self, env) -> BaseAlgorithm:
-        model = DQN(
-            "MultiInputPolicy",
-            env,
-            learning_rate=3e-4,
-            buffer_size=10_000,
-            learning_starts=10_000,
-            batch_size=64,
-            gamma=0.995,
-            train_freq=1,
-            target_update_interval=1_500,
-            verbose=1,
-            tensorboard_log=f"runs/{self._run.id}",
-            policy_kwargs=self.policy_kwargs
-        )
-        model.learn(self.train_steps, callback=CallbackList([
-            WandbCallback(
-                gradient_save_freq=1_000,
-                model_save_path=f"models/{self._run.id}",
-                verbose=2,
-            ),
-            CustomMetricsCallback()
-        ]))
-        model.save(f"models/{self._run.id}/final_model")
-        model_path = f"models/{self._run.id}/final_model.zip"
-        wandb.save(model_path)
-        for f in glob.glob(f"videos/{self._run.id}/*.mp4"):
-            wandb.log({"video": wandb.Video(f, fps=30, format="mp4")})
-        return model
+    def _evaluate(self, envs, *, n_episodes: int) -> None:
+        n_dim2 = envs.get_attr("n_machines")[0]
 
-    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int , seed: int = 42) -> None:
-        envs = self.generate_enviroemnt(f"videos/evaluation/{self._run.id}")
         for ep in range(n_episodes):
-            envs.seed(seed + ep)
+            envs.seed(self.seed + ep)
             obs = envs.reset()
             obs: 'ObservationDict'
             total_reward, steps, done = 0.0, 0, False
             allocations = 0
             while not done:
                 steps += 1
-                action, _states = model.predict(obs, deterministic=True)
-                obs, reward, done, infos = envs.step(action)
+                skip, dim1, dim2 = self.scheduler.select(obs)
+                action = self._encode_action(skip, dim1, dim2, n_dim2)
+                obs, reward, done, infos = envs.step(np.array([action]))
                 total_reward += reward
-                allocations += int(action != 0 and obs['action_success'])
+                allocations += int(not skip and obs['action_success'])
 
             completed_count = np.sum(obs['status'] == JobStatus.COMPLETED)
             running_count = np.sum(obs['status'] == JobStatus.RUNNING)
@@ -121,7 +91,6 @@ class ExperimentRunner:
 
         for f in glob.glob(f"videos/evaluation/{self._run.id}/*.mp4"):
             wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
-
 
     def generate_enviroemnt(self, path: str):
         envs = DummyVecEnv([lambda: Monitor(

@@ -1,4 +1,5 @@
-from time import sleep
+# TODO: Add Render where selected action is with color
+# TODO: add metric of number of completed job
 import typing as tp
 
 from stable_baselines3.dqn import DQN
@@ -6,20 +7,30 @@ from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from stable_baselines3.common.env_checker import check_env
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
-from scheduling_simulator.expiremnt.train_runner import TrainExperimentRunner
+from scheduling_simulator.expiremnt.feature_extractor.features_extractor import SchedulingFeaturesExtractor
+from scheduling_simulator.expiremnt.train_runner import ExperimentRunner
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
 
 config: 'ClusterGenerationConfig' = {
     'n_machines': 1,
-    'n_jobs': 4,
+    'n_jobs': 10,
     'n_resource': 1,
-    'n_time': 10,
+    'n_time': 1,
     'max_capacity': 255
 }
-runner = TrainExperimentRunner(config)
-print(runner)
+runner = ExperimentRunner(
+    config,
+    train_steps=200_000,
+    evalution_steps=500,
+    policy_kwargs=dict(
+        # features_extractor_class=SchedulingFeaturesExtractor,
+        # features_extractor_kwargs=dict(cnn_out_dim=64, mlp_out_dim=64),
+        net_arch=[512, 1024, 512, 128, 32],
+    ),
+    max_time=20
+)
 runner.run()
 # env = SchedulingEnviorment(config, render_mode='human')
 # env = FailureSkipTimeWrapper(env, max_time=500)
