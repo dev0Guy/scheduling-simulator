@@ -109,7 +109,7 @@ def train_model(
         )
         model.learn(training_steps, reset_num_timesteps=False)
         timestep = model.num_timesteps
-        val_config = {**config, 'n_jobs': np.random.choice(VAL_JOB_COUNTS)}
+        val_config = {**config, 'n_jobs': VAL_JOB_COUNTS[0]}
         validation_flow, _ = evaluate('learned', model, val_config, validation_seeds)
         validation_flow = validation_flow.mean()
         if validation_flow < best_validation_flow:

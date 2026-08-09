@@ -4,6 +4,7 @@ from stable_baselines3.common.callbacks import CallbackList
 import wandb
 import typing as tp
 import gymnasium as gym
+import numpy as np
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
@@ -77,10 +78,29 @@ class TrainExperimentRunner:
         wandb.finish()
 
     def generate_enviroemnt(self):
-        envs = DummyVecEnv([lambda: Monitor(
-            gym.wrappers.TimeLimit(
-                SchedulingEnviorment(self.config, render_mode='rgb_array'),
-                max_episode_steps=500,
+        max_n_jobs = self.config['n_jobs'] * 2
+        small_counts = [self.config['n_jobs'] // 2, self.config['n_jobs']]
+        large_counts = [
+            self.config['n_jobs'] + self.config['n_jobs'] // 4,
+            self.config['n_jobs'] + self.config['n_jobs'] // 2,
+        ]
+
+        def _make_env():
+            if np.random.random() < 0.8:
+                n_jobs = int(np.random.choice(small_counts))
+            else:
+                n_jobs = int(np.random.choice(large_counts))
+            train_config = {**self.config, 'n_jobs': n_jobs}
+            return Monitor(
+                gym.wrappers.TimeLimit(
+                    SchedulingEnviorment(
+                        train_config,
+                        render_mode='rgb_array',
+                        max_n_jobs=max_n_jobs,
+                    ),
+                    max_episode_steps=500,
+                )
             )
-        )])
+
+        envs = DummyVecEnv([_make_env])
         return envs

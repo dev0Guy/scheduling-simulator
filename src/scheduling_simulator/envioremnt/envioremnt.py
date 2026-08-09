@@ -54,7 +54,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
     _last_observation: Optional[Observation]
     _last_observation_dict: Optional['ObservationDict']
     _cluster: Cluster
-    _rewarder: RewardFunction
+    _reward_function: RewardFunction
 
     metadata = {'render_modes': ['rgb_array', 'human']}
 

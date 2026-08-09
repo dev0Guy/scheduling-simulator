@@ -13,5 +13,6 @@ config: 'ClusterGenerationConfig' = {
     'n_time': 20,
     'max_capacity': 255,
 }
-runner = TrainExperimentRunner(config)
-runner.run()
+if __name__ == '__main__':
+    runner = TrainExperimentRunner(config)
+    runner.run()
