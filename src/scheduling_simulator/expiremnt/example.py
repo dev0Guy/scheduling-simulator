@@ -7,10 +7,10 @@ if tp.TYPE_CHECKING:
 
 
 config: 'ClusterGenerationConfig' = {
-    'n_machines': 1,
-    'n_jobs': 8,
-    'n_resource': 1,
-    'n_time': 10,
+    'n_machines': 2,
+    'n_jobs': 32,
+    'n_resource': 2,
+    'n_time': 20,
     'max_capacity': 255,
 }
 runner = TrainExperimentRunner(config)

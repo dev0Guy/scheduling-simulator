@@ -518,3 +518,29 @@ The preference signal helps generalization at larger sizes but slightly
 hurts at the smallest size, consistent with prior BOPO experiments.
 The effect is real but modest (~1-2%), likely because PPO already
 discovers most of the value via the dense reward.
+
+## A/B Test: Architecture Simplification (2026-08-09)
+
+### Setup
+Compared the E8 "improved" architecture (stacked attention + relative
+arrival + padding indicator) against the simpler original (single
+attention, raw arrival, no padding indicator). Same training config,
+100 iterations, 15 eval seeds.
+
+### Results (2m/2r, 15 seeds)
+
+| Jobs | Stacked + rel arrival | Simple | Winner |
+|------|-----------------------|--------|--------|
+| 24 | 436.7 | 432.5 | Simple (-1.0%) |
+| 32 | 744.5 | 721.2 | Simple (-3.1%) |
+| 40 | 1099.5 | 1089.5 | Simple (-0.9%) |
+| 44 | 1322.5 | 1312.6 | Simple (-0.7%) |
+
+The simpler architecture wins on every test size. The E8 additions
+(stacked attention, relative arrival, padding indicator) added
+complexity without improving results. Reverted to the simpler version.
+
+### Lesson
+Always A/B test architecture changes. Features that seem theoretically
+beneficial can hurt by adding parameters that dilute the learning signal
+on small problems.

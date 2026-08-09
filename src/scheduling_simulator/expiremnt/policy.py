@@ -41,7 +41,7 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
         self.max_capacity = float(observation_space['machines_capacity'].high.max())
         self.time_scale = float(n_time)
 
-        job_input_dim = n_resources * n_time + 4 + 7
+        job_input_dim = n_resources * n_time + 4 + 6
         machine_input_dim = 2 * n_resources * n_time
 
         super().__init__(
@@ -63,10 +63,6 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
             embed_dim=embedding_dim, num_heads=4, batch_first=True,
         )
         self.job_norm = nn.LayerNorm(embedding_dim)
-        self.job_attention2 = nn.MultiheadAttention(
-            embed_dim=embedding_dim, num_heads=4, batch_first=True,
-        )
-        self.job_norm2 = nn.LayerNorm(embedding_dim)
         self.cross_attention = nn.MultiheadAttention(
             embed_dim=embedding_dim, num_heads=4, batch_first=True,
         )
@@ -104,20 +100,14 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
         is_real_job = self._build_job_mask(observations)
         key_padding_mask = ~is_real_job
 
-        relative_arrival = (
-            observations['arrival'].float()
-            - observations['time'].float().squeeze(-1).unsqueeze(-1)
-        ) / self.time_scale
-
         job_metadata = th.stack(
             [
                 observations['ttl'].float() / self.time_scale,
-                relative_arrival,
+                observations['arrival'].float() / self.time_scale,
                 observations['wait_time'].float() / self.time_scale,
                 observations['scheduled_at'].float() / self.time_scale,
                 observations['finished_at'].float() / self.time_scale,
                 observations['size'].float() / self.time_scale,
-                is_real_job.float(),
             ],
             dim=-1,
         )
@@ -136,10 +126,6 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
             job_emb, job_emb, job_emb, key_padding_mask=key_padding_mask,
         )
         attended = self.job_norm(job_emb + attended)
-        attended2, _ = self.job_attention2(
-            attended, attended, attended, key_padding_mask=key_padding_mask,
-        )
-        attended = self.job_norm2(attended + attended2)
 
         cross, _ = self.cross_attention(attended, machine_emb, machine_emb)
         cross = self.cross_norm(attended + cross)

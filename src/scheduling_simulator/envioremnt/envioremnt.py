@@ -72,6 +72,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         self._reward_function = reward_function
         self._renderer = None
         self._last_observation_dict = None
+        self._n_actual = 0
         self._creator = creator
         self._max_n_jobs = max_n_jobs or config['n_jobs']
         self.observation_space = gym.spaces.Dict(self._create_observation_space())
@@ -99,55 +100,39 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         }
 
     def _cast(self, observation: 'Observation') -> 'ObservationDict':
-        observation_dict = observation.to_dict()
-        n_actual = observation_dict['status'].shape[0]
+        d = observation.to_dict()
+        n_actual = d['status'].shape[0]
         n_pad = self._max_n_jobs - n_actual
 
-        # Fast path: no padding needed
-        if n_pad <= 0:
-            return {
-                'machines_usage': observation_dict['machines_usage'],
-                'machines_capacity': observation_dict['machines_capacity'],
-                'jobs_usage': observation_dict['jobs_usage'],
-                'status': observation_dict['status'],
-                'ttl': observation_dict['ttl'].astype(np.float32),
-                'arrival': observation_dict['arrival'].astype(np.float32),
-                'wait_time': observation_dict['wait_time'].astype(np.float32),
-                'scheduled_at': observation_dict['scheduled_at'].astype(np.float32),
-                'finished_at': observation_dict['finished_at'].astype(np.float32),
-                'size': observation_dict['size'].astype(np.float32),
-                'time': np.array([observation_dict['time']], dtype=np.float32),
-                'action_success': int(observation_dict['action_success'])
-            }
-
-        # Padded path: pre-allocate and copy (avoids np.pad overhead)
-        n_r = self._config['n_resource']
-        n_t = self._config['n_time']
-
-        jobs_usage = np.zeros((self._max_n_jobs, n_r, n_t), dtype=np.int32)
-        jobs_usage[:n_actual] = observation_dict['jobs_usage']
-
-        status = np.full(self._max_n_jobs, 3, dtype=np.int32)  # COMPLETED
-        status[:n_actual] = observation_dict['status']
-
-        def pad_1d(arr: np.ndarray, pad_value: float = 0.0) -> np.ndarray:
-            out = np.full(self._max_n_jobs, pad_value, dtype=np.float32)
+        def pad_1d(arr: np.ndarray) -> np.ndarray:
+            out = np.zeros(self._max_n_jobs, dtype=np.float32)
             out[:n_actual] = arr.astype(np.float32)
             return out
 
+        def pad_3d(arr: np.ndarray) -> np.ndarray:
+            out = np.zeros((self._max_n_jobs, arr.shape[1], arr.shape[2]), dtype=arr.dtype)
+            out[:n_actual] = arr
+            return out
+
+        status = d['status']
+        jobs_usage = d['jobs_usage']
+        if n_pad > 0:
+            status = np.concatenate([status, np.full(n_pad, 3, dtype=np.int32)])
+            jobs_usage = pad_3d(jobs_usage)
+
         return {
-            'machines_usage': observation_dict['machines_usage'],
-            'machines_capacity': observation_dict['machines_capacity'],
+            'machines_usage': d['machines_usage'],
+            'machines_capacity': d['machines_capacity'],
             'jobs_usage': jobs_usage,
             'status': status,
-            'ttl': pad_1d(observation_dict['ttl']),
-            'arrival': pad_1d(observation_dict['arrival']),
-            'wait_time': pad_1d(observation_dict['wait_time']),
-            'scheduled_at': pad_1d(observation_dict['scheduled_at']),
-            'finished_at': pad_1d(observation_dict['finished_at']),
-            'size': pad_1d(observation_dict['size']),
-            'time': np.array([observation_dict['time']], dtype=np.float32),
-            'action_success': int(observation_dict['action_success'])
+            'ttl': pad_1d(d['ttl']),
+            'arrival': pad_1d(d['arrival']),
+            'wait_time': pad_1d(d['wait_time']),
+            'scheduled_at': pad_1d(d['scheduled_at']),
+            'finished_at': pad_1d(d['finished_at']),
+            'size': pad_1d(d['size']),
+            'time': np.array([d['time']], dtype=np.float32),
+            'action_success': int(d['action_success']),
         }
 
 
@@ -155,6 +140,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         super().reset(seed=seed)
         self._cluster = self._creator(self._config, self.np_random)
         self._last_observation = self._cluster.get_observation()
+        self._n_actual = self._last_observation.to_dict()['status'].shape[0]
         result = self._cast(self._last_observation)
         self._last_observation_dict = result
         return result, {}
@@ -168,14 +154,14 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         else:
             padded_job = (action - 1) % self._max_n_jobs
             machine_idx = (action - 1) // self._max_n_jobs
-            n_actual = self._last_observation.to_dict()['status'].shape[0]
-            if padded_job >= n_actual:
+            if padded_job >= self._n_actual:
                 cluster_action = 0  # padded slot, treat as skip
             else:
-                cluster_action = 1 + machine_idx * n_actual + padded_job
+                cluster_action = 1 + machine_idx * self._n_actual + padded_job
 
         previous_observation = self._last_observation
         self._last_observation = self._cluster.step(cluster_action)
+        self._n_actual = self._last_observation.to_dict()['status'].shape[0]
         result = self._cast(self._last_observation)
         self._last_observation_dict = result
         reward = self._reward_function(self._last_observation, previous_observation)
@@ -185,7 +171,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
 
     def action_masks(self) -> np.ndarray:
         obs = self._last_observation_dict
-        n_actual = self._last_observation.to_dict()['status'].shape[0]
+        n_actual = self._n_actual
         n_machines = self._config['n_machines']
         pending = obs['status'][:n_actual] == 1
         fits = np.all(
