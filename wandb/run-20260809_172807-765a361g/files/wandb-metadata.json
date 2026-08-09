@@ -1,0 +1,36 @@
+{
+  "os":  "macOS-26.6-arm64-arm-64bit",
+  "python":  "CPython 3.12.13",
+  "startedAt":  "2026-08-09T14:28:07.935152Z",
+  "program":  "-m scheduling_simulator.expiremnt.example",
+  "git":  {
+    "remote":  "https://github.com/dev0Guy/scheduling-simulator.git",
+    "commit":  "b78b692e9e5ef67ece94c058c63b59ac1b12d0d1"
+  },
+  "email":  "inms2000@gmail.com",
+  "root":  "/Users/itay.n/Desktop/workspace/open_sources/scheduling-simulator",
+  "host":  "Itays-MacBook-Pro-2.local",
+  "executable":  "/Users/itay.n/Desktop/workspace/open_sources/scheduling-simulator/.venv/bin/python3",
+  "cpu_count":  14,
+  "cpu_count_logical":  14,
+  "disk":  {
+    "/":  {
+      "total":  "494384795648",
+      "used":  "375727640576"
+    }
+  },
+  "memory":  {
+    "total":  "25769803776"
+  },
+  "apple":  {
+    "name":  "Apple M4 Pro",
+    "ecpuCores":  4,
+    "pcpuCores":  10,
+    "gpuCores":  20,
+    "memoryGb":  24,
+    "swapTotalBytes":  "8589934592",
+    "ramTotalBytes":  "25769803776",
+    "macModel":  "Mac16,7"
+  },
+  "writerId":  "nirx2kdm4ayyg14mku3kuya7ift434ps"
+}

@@ -78,12 +78,9 @@ class TrainExperimentRunner:
         wandb.finish()
 
     def generate_enviroemnt(self):
-        max_n_jobs = self.config['n_jobs'] * 2
-        small_counts = [self.config['n_jobs'] // 2, self.config['n_jobs']]
-        large_counts = [
-            self.config['n_jobs'] + self.config['n_jobs'] // 4,
-            self.config['n_jobs'] + self.config['n_jobs'] // 2,
-        ]
+        max_n_jobs = 48
+        small_counts = [20, 24]
+        large_counts = [28, 32, 36]
 
         def _make_env():
             if np.random.random() < 0.8:
