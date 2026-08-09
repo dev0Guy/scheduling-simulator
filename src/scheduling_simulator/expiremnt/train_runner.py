@@ -46,7 +46,7 @@ class TrainExperimentRunner:
         model = MaskablePPO(
             SchedulingPolicy,
             env,
-            learning_rate=3e-4,
+            learning_rate=lambda p: 1e-5 + (3e-4 - 1e-5) * p,
             n_steps=512,
             batch_size=128,
             gamma=1.0,
