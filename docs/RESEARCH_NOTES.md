@@ -497,3 +497,24 @@ low variance (std < 0.85).
 Uniform training over [20-36] under-exposes small sizes, causing the
 24-job regression. Skewed distribution (80% small) fixes it without
 hurting larger sizes.
+
+## BOPO on SB3 (2026-08-09)
+
+Implemented BOPOCallback for SB3: periodically collects SJF/random/learned
+trajectories, builds Bradley-Terry preference pairs, applies a differentiable
+preference loss after PPO updates.
+
+### Results (2m/2r, 50k steps each, 15 eval seeds)
+
+| Jobs | PPO-only | PPO+BOPO | Delta |
+|------|----------|----------|-------|
+| 24 | 436.7 | 441.0 | +1.0% |
+| 32 | 744.5 | 727.3 | -2.3% |
+| 40 | 1099.5 | 1090.7 | -0.8% |
+| 44 | 1322.5 | 1312.5 | -0.8% |
+
+BOPO preference loss decreased from 0.80 to 0.62 over training.
+The preference signal helps generalization at larger sizes but slightly
+hurts at the smallest size, consistent with prior BOPO experiments.
+The effect is real but modest (~1-2%), likely because PPO already
+discovers most of the value via the dense reward.
