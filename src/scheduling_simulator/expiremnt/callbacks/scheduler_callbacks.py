@@ -174,7 +174,7 @@ class CustomMetricsCallback(BaseCallback):
             obs, _ = env.reset(seed=seed)
             while True:
                 mask = get_action_masks(env)
-                action, _ = self.model.predict(obs, deterministic=True, action_masks=mask)
+                action, _ = self.model.predict(obs, deterministic=False, action_masks=mask)
                 obs, _, term, trunc, _ = env.step(int(action))
                 if term or trunc:
                     break

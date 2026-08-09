@@ -45,7 +45,7 @@ class TrainExperimentRunner:
         model = ValidityPPO(
             SchedulingPolicy,
             env,
-            learning_rate=1e-4,
+            learning_rate=2e-4,
             n_steps=2048,
             batch_size=256,
             gamma=1.0,
@@ -65,7 +65,7 @@ class TrainExperimentRunner:
                         log_path=f"models/{self._run.id}",
                         eval_freq=5_000,
                         n_eval_episodes=32,
-                        deterministic=True,
+                        deterministic=False,
                     ),
                     WandbCallback(
                         gradient_save_freq=1_000,
