@@ -36,7 +36,7 @@ class TrainExperimentRunner:
         eval_config = {**self.config, 'n_jobs': 32}
         eval_env = DummyVecEnv([lambda: Monitor(
             gym.wrappers.TimeLimit(
-                SchedulingEnviorment(eval_config, render_mode='rgb_array', max_n_jobs=48),
+                SchedulingEnviorment(eval_config, render_mode='rgb_array', max_n_jobs=72),
                 max_episode_steps=500,
             )
         )])
@@ -46,19 +46,19 @@ class TrainExperimentRunner:
         model = MaskablePPO(
             SchedulingPolicy,
             env,
-            learning_rate=lambda progress: 3e-4 if progress > 0.5 else 1e-5 + (3e-4 - 1e-5) * progress * 2,
+            learning_rate=3e-4,
             n_steps=512,
-            batch_size=64,
+            batch_size=128,
             gamma=1.0,
             gae_lambda=0.95,
             ent_coef=0.02,
-            n_epochs=4,
+            n_epochs=6,
             max_grad_norm=0.5,
             verbose=1,
             device=get_auto_device(),
             tensorboard_log=f"runs/{self._run.id}"
         )
-        model.learn(50_000, callback=CallbackList([
+        model.learn(200_000, callback=CallbackList([
                     MaskableEvalCallback(
                         eval_env,
                         best_model_save_path=f"models/{self._run.id}",
@@ -83,15 +83,11 @@ class TrainExperimentRunner:
         wandb.finish()
 
     def generate_enviroemnt(self):
-        max_n_jobs = 48
-        small_counts = [20, 24]
-        large_counts = [28, 32, 36]
+        max_n_jobs = 72
+        job_counts = [20, 24, 28, 32, 36, 40]
 
         def _make_env():
-            if np.random.random() < 0.8:
-                n_jobs = int(np.random.choice(small_counts))
-            else:
-                n_jobs = int(np.random.choice(large_counts))
+            n_jobs = int(np.random.choice(job_counts))
             train_config = {**self.config, 'n_jobs': n_jobs}
             return Monitor(
                 gym.wrappers.TimeLimit(
