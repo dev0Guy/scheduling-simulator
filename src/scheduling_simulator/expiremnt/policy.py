@@ -218,6 +218,29 @@ class SharedActionHead(nn.Module):
         return self.scorer(action_embeddings).squeeze(-1)
 
 
+class ValidityHead(nn.Module):
+    """Predicts action validity from action embeddings.
+
+    Separate from the scheduling scorer — trained with BCE on the
+    action mask. At inference, sigmoid(validity_logit) gates the
+    action distribution when no oracle mask is available.
+    """
+
+    def __init__(self, n_actions: int, embedding_dim: int):
+        super().__init__()
+        self.n_actions = n_actions
+        self.embedding_dim = embedding_dim
+        self.scorer = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim),
+            nn.ReLU(),
+            nn.Linear(embedding_dim, 1),
+        )
+
+    def forward(self, features: th.Tensor) -> th.Tensor:
+        action_embeddings = features.reshape(-1, self.n_actions, self.embedding_dim)
+        return self.scorer(action_embeddings).squeeze(-1)
+
+
 class SchedulingValueNet(nn.Module):
     def __init__(self, embedding_dim: int):
         super().__init__()
@@ -267,6 +290,7 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
         )
         self.action_net = SharedActionHead(action_space.n, embedding_dim)
         self.value_net = SchedulingValueNet(embedding_dim)
+        self.validity_net = ValidityHead(action_space.n, embedding_dim)
         self.optimizer = self.optimizer_class(
             self.parameters(),
             lr=lr_schedule(1),
@@ -288,27 +312,66 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
         values, log_prob, entropy = super().evaluate_actions(
             obs, actions, action_masks
         )
-        # Auxiliary validity loss combining:
-        # 1. BCE: train raw logits to predict action validity (feasibility
-        #    classification, Kanimi et al. 2026)
-        # 2. Logit penalty: directly penalize positive invalid logits.
-        #    During masked training, PPO sets invalid logits to -1e8 and
-        #    never sees them, so no PPO gradient keeps them low. This
-        #    penalty provides a direct gradient pushing invalid logits
-        #    toward negative values.
+        # Train separate validity head to predict action validity.
+        # The scheduling logits are never penalized for invalid actions
+        # (PPO sets them to -1e8 and ignores them), so a separate head
+        # with its own BCE loss is the only way to learn validity without
+        # an oracle mask at deployment.
         if action_masks is not None:
-            raw_logits = self.action_dist.distribution._original_logits
-            valid = action_masks.float()
-            bce = F.binary_cross_entropy_with_logits(raw_logits, valid)
-            # Penalize invalid logits that are positive (should be negative)
-            invalid_mask = 1.0 - valid
-            invalid_logits = raw_logits * invalid_mask
-            # ReLU penalty: only penalize logits > 0 (already suppressed)
-            logit_penalty = F.relu(invalid_logits).mean()
-            self._validity_loss = bce + logit_penalty
+            pi_features = self.mlp_extractor.forward_actor(
+                self.extract_features(obs)
+            )
+            validity_logits = self.validity_net(pi_features)
+            self._validity_loss = F.binary_cross_entropy_with_logits(
+                validity_logits, action_masks.float()
+            )
         else:
             self._validity_loss = None
         return values, log_prob, entropy
+
+
+    def predict(
+        self,
+        observation,
+        state=None,
+        episode_start=None,
+        deterministic: bool = False,
+        action_masks=None,
+    ):
+        if action_masks is not None:
+            return super().predict(
+                observation, state, episode_start, deterministic, action_masks
+            )
+        # No oracle mask: use validity head to gate the distribution.
+        from stable_baselines3.common.utils import obs_as_tensor
+        obs_tensor = obs_as_tensor(observation, self.device)
+        # Add batch dim if missing (single env, not VecEnv)
+        # VecEnv observations have a leading batch dim on every key.
+        # Single-env observations don't — e.g. status is (48,) not (1, 48).
+        needs_squeeze = False
+        if isinstance(observation, dict):
+            status_ndim = observation['status'].ndim
+            if status_ndim == 1:
+                needs_squeeze = True
+                obs_tensor = {k: v.unsqueeze(0) for k, v in obs_tensor.items()}
+        with th.no_grad():
+            features = self.extract_features(obs_tensor)
+            pi_features = self.mlp_extractor.forward_actor(features)
+            action_logits = self.action_net(pi_features)
+            validity_logits = self.validity_net(pi_features)
+            validity_prob = th.sigmoid(validity_logits)
+            gated_probs = th.softmax(action_logits, dim=-1) * validity_prob
+            gated_probs = gated_probs / gated_probs.sum(dim=-1, keepdim=True)
+            if deterministic:
+                action = th.argmax(gated_probs, dim=-1)
+            else:
+                action = th.multinomial(gated_probs, 1).squeeze(-1)
+        action = action.cpu().numpy()
+        if needs_squeeze:
+            action = action[0]
+        if state is not None:
+            return action, state
+        return action, None
 
 
 class ValidityPPO(MaskablePPO):
