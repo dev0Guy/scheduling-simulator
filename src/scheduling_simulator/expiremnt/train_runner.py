@@ -45,7 +45,7 @@ class TrainExperimentRunner:
         model = ValidityPPO(
             SchedulingPolicy,
             env,
-            learning_rate=3e-4,
+            learning_rate=lambda progress: 1e-5 + (3e-4 - 1e-5) * progress,
             n_steps=512,
             batch_size=128,
             gamma=1.0,
@@ -100,5 +100,5 @@ class TrainExperimentRunner:
                 )
             )
 
-        envs = DummyVecEnv([_make_env for _ in range(4)])
+        envs = DummyVecEnv([_make_env for _ in range(8)])
         return envs
