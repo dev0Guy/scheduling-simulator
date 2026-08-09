@@ -1,5 +1,6 @@
 from typing_extensions import Callable
 from scheduling_simulator.core.cluster import Observation, Cluster
+from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.core.creator import generate_cluster_python
 from typing import Literal, Any, Optional, TYPE_CHECKING
 import gymnasium as gym
@@ -35,11 +36,11 @@ def flow_time_reward(current_observation: Observation, prev_observation: Optiona
 
     if elapsed > 0:
         active = np.count_nonzero(
-            (previous['status'] == 1) | (previous['status'] == 2)
+            (previous['status'] == int(JobStatus.RUNNING)) | (previous['status'] == int(JobStatus.PENDING))
         )
         return -float(active)
     else:
-        pending = np.count_nonzero(previous['status'] == 1)
+        pending = np.count_nonzero(previous['status'] == int(JobStatus.PENDING))
         return -float(pending)
 
 

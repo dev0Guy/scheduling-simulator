@@ -68,17 +68,19 @@ def train_model(
     seed: int,
 ) -> tuple[MaskablePPO, dict[str, float | int]]:
     environment = DummyVecEnv([_make_env_fn(config, 0, randomize_seed=True)])
-    # LR: 3e-4 for first half, then linear decay to 1e-5
-    def lr_schedule(progress: float) -> float:
-        if progress > 0.5:
-            return 1e-5 + (3e-4 - 1e-5) * (progress - 0.5) * 2
-        return 3e-4
+    # LR: 3e-4 for first half (progress_remaining > 0.5), then decay to 1e-5
+    def lr_schedule(progress_remaining: float) -> float:
+        if progress_remaining > 0.5:
+            return 3e-4
+        factor = progress_remaining / 0.5
+        return 1e-5 + (3e-4 - 1e-5) * factor
 
-    # Clip range: 0.2 for first half, then linear decay to 0.1
-    def clip_schedule(progress: float) -> float:
-        if progress > 0.5:
-            return 0.1 + (0.2 - 0.1) * (progress - 0.5) * 2
-        return 0.2
+    # Clip range: 0.2 for first half, then decay to 0.1
+    def clip_schedule(progress_remaining: float) -> float:
+        if progress_remaining > 0.5:
+            return 0.2
+        factor = progress_remaining / 0.5
+        return 0.1 + (0.2 - 0.1) * factor
 
     model = MaskablePPO(
         SchedulingPolicy,
