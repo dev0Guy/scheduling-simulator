@@ -124,7 +124,7 @@ class CustomMetricsCallback(BaseCallback):
             'n_machines': 2, 'n_jobs': 32, 'n_resource': 2,
             'n_time': 20, 'max_capacity': 255,
         }
-        max_n_jobs = 48
+        max_n_jobs = 72
 
         def make_eval():
             return Monitor(gym.wrappers.TimeLimit(
