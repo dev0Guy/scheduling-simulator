@@ -11,7 +11,6 @@ from wandb.integration.sb3 import WandbCallback
 
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
 from scheduling_simulator.expiremnt.policy import SchedulingPolicy, ValidityPPO, get_auto_device
-from prodigyopt import Prodigy
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -46,12 +45,8 @@ class TrainExperimentRunner:
         model = ValidityPPO(
             SchedulingPolicy,
             env,
-            learning_rate=1.0,
-            policy_kwargs={
-                'optimizer_class': Prodigy,
-                'optimizer_kwargs': {'weight_decay': 0.01},
-            },
-            n_steps=512,
+            learning_rate=3e-4,
+n_steps=512,
             batch_size=128,
             gamma=1.0,
             gae_lambda=0.95,
@@ -60,10 +55,10 @@ class TrainExperimentRunner:
             max_grad_norm=0.5,
             verbose=1,
             device=get_auto_device(),
-            validity_coef=0.5,
+            validity_coef=lambda progress: 0.0 if progress > 0.5 else (0.5 * (0.5 - progress) / 0.25 if progress > 0.25 else 0.5),
             tensorboard_log=f"runs/{self._run.id}"
         )
-        model.learn(200_000, callback=CallbackList([
+        model.learn(100_000, callback=CallbackList([
                     MaskableEvalCallback(
                         eval_env,
                         best_model_save_path=f"models/{self._run.id}",

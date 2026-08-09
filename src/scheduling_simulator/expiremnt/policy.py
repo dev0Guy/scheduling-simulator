@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable, Union
 
 import numpy as np
 import torch as th
@@ -314,15 +314,25 @@ class ValidityPPO(MaskablePPO):
     :param validity_coef: Weight of the validity classification loss.
     """
 
-    validity_coef: float
+    validity_coef: Union[float, Callable[[float], float]]
 
-    def __init__(self, *args: Any, validity_coef: float = 0.5, **kwargs: Any) -> None:
-        self.validity_coef = validity_coef
+    def __init__(self, *args: Any, validity_coef: Union[float, Callable[[float], float]] = 0.5, **kwargs: Any) -> None:
+        self._validity_coef = validity_coef
         super().__init__(*args, **kwargs)
+
+    @property
+    def validity_coef(self) -> float:
+        """Current validity coef — supports schedules via progress remaining."""
+        vc = self._validity_coef
+        if callable(vc):
+            return vc(self._current_progress_remaining)
+        return vc
 
     def train(self) -> None:
         self.policy.set_training_mode(True)
         self._update_learning_rate(self.policy.optimizer)
+        # Resolve validity coef schedule once per train() call
+        current_validity_coef = self.validity_coef
         clip_range = self.clip_range(self._current_progress_remaining)
         if self.clip_range_vf is not None:
             clip_range_vf = self.clip_range_vf(self._current_progress_remaining)
@@ -378,7 +388,7 @@ class ValidityPPO(MaskablePPO):
                 # Auxiliary validity classification loss
                 validity_loss = getattr(self.policy, '_validity_loss', None)
                 if validity_loss is not None:
-                    loss = loss + self.validity_coef * validity_loss
+                    loss = loss + current_validity_coef * validity_loss
                     validity_losses.append(validity_loss.item())
 
                 with th.no_grad():
