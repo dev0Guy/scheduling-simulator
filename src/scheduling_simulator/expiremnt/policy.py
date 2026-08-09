@@ -232,6 +232,96 @@ class PointerActionHead(nn.Module):
         return logits
 
 
+class TwoStagePointerHead(nn.Module):
+    """Two-stage pointer scoring: job selection then machine selection.
+
+    Decomposes the flat action distribution into:
+      p(action) = p(job) * p(machine | job)
+
+    Stage 1: global query attends over job embeddings -> job logits
+    Stage 2: each job embedding attends over machine embeddings -> machine logits
+
+    The flat action logit for (machine m, job j) is:
+      log p(job=j) + log p(machine=m | job=j)
+
+    This reduces the effective action space from O(n_m * n_j) to
+    O(n_j) + O(n_m), which is easier to learn and more natural for
+    scheduling. Same parameters handle any job/machine count.
+
+    Reference: Decima (Mao et al. 2018) for two-stage scheduling pointers.
+    """
+
+    def __init__(self, n_actions: int, embedding_dim: int, n_machines: int, max_n_jobs: int):
+        super().__init__()
+        self.n_actions = n_actions
+        self.embedding_dim = embedding_dim
+        self.n_machines = n_machines
+        self.max_n_jobs = max_n_jobs
+
+        # Stage 1: job selection pointer
+        self.job_query = nn.Linear(embedding_dim, embedding_dim)
+        self.job_key = nn.Linear(embedding_dim, embedding_dim)
+
+        # Stage 2: machine selection pointer (conditioned on job)
+        self.machine_query = nn.Linear(embedding_dim, embedding_dim)
+        self.machine_key = nn.Linear(embedding_dim, embedding_dim)
+
+        # Skip scoring
+        self.skip_score = nn.Linear(embedding_dim, 1)
+
+        self.scale = embedding_dim ** -0.5
+
+    def forward(self, features: th.Tensor) -> th.Tensor:
+        batch = features.shape[0]
+        embedding_dim = self.embedding_dim
+        n_m = self.n_machines
+        n_j = self.max_n_jobs
+
+        # Reshape: skip embedding + pair embeddings
+        action_embeddings = features.reshape(batch, self.n_actions, embedding_dim)
+        skip_emb = action_embeddings[:, 0, :]  # (batch, dim)
+
+        # Pair embeddings: (batch, n_m * n_j, dim) -> (batch, n_m, n_j, dim)
+        pair_emb = action_embeddings[:, 1:, :].reshape(batch, n_m, n_j, embedding_dim)
+
+        # Job embeddings: mean over machines for each job
+        job_emb = pair_emb.mean(dim=1)  # (batch, n_j, dim)
+
+        # Machine embeddings: mean over jobs for each machine
+        machine_emb = pair_emb.mean(dim=2)  # (batch, n_m, dim)
+
+        # Stage 1: job selection
+        # Global context from mean-pooled jobs
+        job_context = job_emb.mean(dim=1, keepdim=True)  # (batch, 1, dim)
+        job_q = self.job_query(job_context)  # (batch, 1, dim)
+        job_k = self.job_key(job_emb)  # (batch, n_j, dim)
+        job_logits = (job_q * job_k).sum(dim=-1) * self.scale  # (batch, n_j)
+        job_log_probs = F.log_softmax(job_logits, dim=-1)  # (batch, n_j)
+
+        # Stage 2: machine selection for each job
+        # Query: job embedding, Key: machine embedding
+        machine_q = self.machine_query(job_emb)  # (batch, n_j, dim)
+        machine_k = self.machine_key(machine_emb)  # (batch, n_m, dim)
+        # (batch, n_j, n_m)
+        machine_logits = th.einsum('bjd,bmd->bjm', machine_q, machine_k) * self.scale
+        machine_log_probs = F.log_softmax(machine_logits, dim=-1)  # (batch, n_j, n_m)
+
+        # Skip logit
+        skip_logit = self.skip_score(skip_emb).squeeze(-1)  # (batch,)
+
+        # Combine into flat action logits
+        # action 0 = skip
+        # action 1 + m * n_j + j = (machine m, job j)
+        # logit(m, j) = log p(job=j) + log p(machine=m | job=j)
+        # Flat order: (m=0,j=0), (m=0,j=1), ..., (m=0,j=nj-1), (m=1,j=0), ...
+        joint_log_probs = job_log_probs.unsqueeze(2) + machine_log_probs  # (batch, n_j, n_m)
+        joint_log_probs = joint_log_probs.transpose(1, 2)  # (batch, n_m, n_j)
+        joint_flat = joint_log_probs.reshape(batch, n_m * n_j)  # (batch, n_m * n_j)
+
+        # Final: skip logit + joint logits
+        return th.cat([skip_logit.unsqueeze(-1), joint_flat], dim=-1)
+
+
 class SchedulingValueNet(nn.Module):
     def __init__(self, embedding_dim: int):
         super().__init__()
@@ -280,6 +370,56 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
             **kwargs,
         )
         self.action_net = PointerActionHead(action_space.n, embedding_dim)
+        self.value_net = SchedulingValueNet(embedding_dim)
+        self.optimizer = self.optimizer_class(
+            self.parameters(),
+            lr=lr_schedule(1),
+            **self.optimizer_kwargs,
+        )
+
+    def _build_mlp_extractor(self) -> None:
+        self.mlp_extractor = SchedulingMlpExtractor(
+            self.scheduling_n_actions,
+            self.scheduling_embedding_dim,
+        )
+
+
+class TwoStageSchedulingPolicy(MaskableMultiInputActorCriticPolicy):
+    """Two-stage pointer policy: job selection then machine selection.
+
+    Uses TwoStagePointerHead which decomposes p(action) = p(job) * p(machine|job).
+    Same encoder and value network as SchedulingPolicy.
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Dict,
+        action_space: spaces.Space,
+        lr_schedule: Schedule,
+        embedding_dim: int = 64,
+        **kwargs: Any,
+    ):
+        self.scheduling_n_actions = action_space.n
+        self.scheduling_embedding_dim = embedding_dim
+        kwargs.setdefault('optimizer_class', th.optim.AdamW)
+        kwargs.setdefault('optimizer_kwargs', {'weight_decay': 0.01})
+        kwargs.pop('net_arch', None)
+        kwargs.pop('ortho_init', None)
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            net_arch={'pi': [], 'vf': []},
+            ortho_init=False,
+            features_extractor_class=PointerFeaturesExtractor,
+            features_extractor_kwargs={'embedding_dim': embedding_dim},
+            **kwargs,
+        )
+        n_machines = observation_space['machines_usage'].shape[0]
+        max_n_jobs = observation_space['jobs_usage'].shape[0]
+        self.action_net = TwoStagePointerHead(
+            action_space.n, embedding_dim, n_machines, max_n_jobs,
+        )
         self.value_net = SchedulingValueNet(embedding_dim)
         self.optimizer = self.optimizer_class(
             self.parameters(),
