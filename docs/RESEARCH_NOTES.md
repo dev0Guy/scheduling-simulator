@@ -471,3 +471,29 @@ These improvements are included in the E9 benchmark above.
 
 BOPO extends generalization to 44 jobs (not seen during training in the
 2m/2r config) and maintains 4-6% improvement over SJF.
+
+## Multi-Seed Multi-Resource Results (P0, 2026-08-09)
+
+### Configuration
+- 2 machines, 2 resources, training skew 80% [20,24], 20% [28,32,36]
+- Validation: 40 jobs, test: [24, 32, 40, 44]
+- 3 training seeds
+
+### Results
+
+| Jobs | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
+|------|--------|--------|--------|------|-----|
+| 24 | +2.0% | +0.1% | -0.7% | +0.5% | 1.13 |
+| 32 | -4.3% | -5.3% | -6.3% | -5.3% | 0.82 |
+| 40 | -6.3% | -6.4% | -7.4% | -6.7% | 0.50 |
+| 44 | -5.9% | -5.1% | -6.4% | -5.8% | 0.54 |
+
+Small-job skew fixes the 24-job regression (matches SJF within noise).
+Learned consistently beats SJF by 5-7% on 32-44 jobs, all seeds,
+low variance (std < 0.85).
+
+## P2: Small-job skew diagnosis
+
+Uniform training over [20-36] under-exposes small sizes, causing the
+24-job regression. Skewed distribution (80% small) fixes it without
+hurting larger sizes.
