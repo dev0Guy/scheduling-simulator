@@ -10,9 +10,12 @@ from torch.nn import functional as F
 
 
 def get_auto_device() -> str:
-    """Pick the best available device: mps > cuda > cpu."""
-    if th.backends.mps.is_available():
-        return 'mps'
+    """Pick the best available device: cuda > cpu.
+
+    MPS is slower than CPU for this model size due to data-transfer
+    overhead. Only use CUDA GPUs where the compute benefit outweighs
+    the transfer cost.
+    """
     if th.cuda.is_available():
         return 'cuda'
     return 'cpu'
