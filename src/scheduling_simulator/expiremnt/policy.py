@@ -288,16 +288,24 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
         values, log_prob, entropy = super().evaluate_actions(
             obs, actions, action_masks
         )
-        # Auxiliary validity loss: train raw logits (before masking) to
-        # predict action validity. This teaches the policy to suppress
-        # invalid actions without relying on oracle masks at deployment.
-        # Inspired by feasibility classification (Kanimi et al., 2026) and
-        # gradient-based invalid action suppression (Petri-Net JSSP, 2026).
+        # Auxiliary validity loss combining:
+        # 1. BCE: train raw logits to predict action validity (feasibility
+        #    classification, Kanimi et al. 2026)
+        # 2. Logit penalty: directly penalize positive invalid logits.
+        #    During masked training, PPO sets invalid logits to -1e8 and
+        #    never sees them, so no PPO gradient keeps them low. This
+        #    penalty provides a direct gradient pushing invalid logits
+        #    toward negative values.
         if action_masks is not None:
             raw_logits = self.action_dist.distribution._original_logits
-            self._validity_loss = F.binary_cross_entropy_with_logits(
-                raw_logits, action_masks.float()
-            )
+            valid = action_masks.float()
+            bce = F.binary_cross_entropy_with_logits(raw_logits, valid)
+            # Penalize invalid logits that are positive (should be negative)
+            invalid_mask = 1.0 - valid
+            invalid_logits = raw_logits * invalid_mask
+            # ReLU penalty: only penalize logits > 0 (already suppressed)
+            logit_penalty = F.relu(invalid_logits).mean()
+            self._validity_loss = bce + logit_penalty
         else:
             self._validity_loss = None
         return values, log_prob, entropy
