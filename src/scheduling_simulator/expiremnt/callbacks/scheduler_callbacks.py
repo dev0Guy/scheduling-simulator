@@ -115,50 +115,68 @@ class CustomMetricsCallback(BaseCallback):
         })
 
     def _eval_baselines(self, seeds: range) -> dict:
-        """Evaluate SJF, random, and learned policy on a few seeds."""
-        env = self.model.get_env()
+        """Evaluate SJF, random, and learned policy on a fixed eval env."""
+        import gymnasium as gym
+        from stable_baselines3.common.monitor import Monitor
+        from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
+
+        eval_config = {
+            'n_machines': 2, 'n_jobs': 32, 'n_resource': 2,
+            'n_time': 20, 'max_capacity': 255,
+        }
+        max_n_jobs = 48
+
+        def make_eval():
+            return Monitor(gym.wrappers.TimeLimit(
+                SchedulingEnviorment(eval_config, render_mode='rgb_array', max_n_jobs=max_n_jobs),
+                max_episode_steps=500,
+            ))
+
         flows = {"sjf": [], "random": [], "learned": []}
+        n_jobs = eval_config['n_jobs']
 
         for seed in seeds:
-            obs = env.reset()
-            rng = np.random.default_rng(seed)
-            done = False
-            while not done:
+            # SJF
+            env = make_eval()
+            obs, _ = env.reset(seed=seed)
+            while True:
                 mask = get_action_masks(env)
-                alloc = np.flatnonzero(mask[0, 1:]) + 1
+                alloc = np.flatnonzero(mask[1:]) + 1
                 if not alloc.size:
                     action = 0
                 else:
-                    jobs = (alloc - 1) % obs["size"].shape[0]
-                    # SJF: pick shortest job
-                    action = int(alloc[np.argmin(obs["size"][0, jobs])])
-                obs, _, done_arr, _ = env.step([action])
-                done = bool(done_arr[0])
-            flows["sjf"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
-            env.reset()
+                    jobs = (alloc - 1) % n_jobs
+                    action = int(alloc[np.argmin(obs['size'][jobs])])
+                obs, _, term, trunc, _ = env.step(action)
+                if term or trunc:
+                    break
+            flows["sjf"].append(float((obs['finished_at'] - obs['arrival']).sum()))
+            env.close()
 
-        for seed in seeds:
-            obs = env.reset()
+            # Random
+            env = make_eval()
+            obs, _ = env.reset(seed=seed)
             rng = np.random.default_rng(seed)
-            done = False
-            while not done:
+            while True:
                 mask = get_action_masks(env)
-                alloc = np.flatnonzero(mask[0, 1:]) + 1
+                alloc = np.flatnonzero(mask[1:]) + 1
                 action = int(rng.choice(alloc)) if alloc.size else 0
-                obs, _, done_arr, _ = env.step([action])
-                done = bool(done_arr[0])
-            flows["random"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
-            env.reset()
+                obs, _, term, trunc, _ = env.step(action)
+                if term or trunc:
+                    break
+            flows["random"].append(float((obs['finished_at'] - obs['arrival']).sum()))
+            env.close()
 
-        for seed in seeds:
-            obs = env.reset()
-            done = False
-            while not done:
+            # Learned
+            env = make_eval()
+            obs, _ = env.reset(seed=seed)
+            while True:
                 mask = get_action_masks(env)
                 action, _ = self.model.predict(obs, deterministic=True, action_masks=mask)
-                obs, _, done_arr, _ = env.step(action)
-                done = bool(done_arr[0])
-            flows["learned"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
-            env.reset()
+                obs, _, term, trunc, _ = env.step(int(action))
+                if term or trunc:
+                    break
+            flows["learned"].append(float((obs['finished_at'] - obs['arrival']).sum()))
+            env.close()
 
         return {k: float(np.mean(v)) for k, v in flows.items()}
