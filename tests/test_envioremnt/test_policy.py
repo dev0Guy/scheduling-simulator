@@ -72,9 +72,9 @@ def test_policy_learns_through_masked_rollout() -> None:
         seed=0,
     )
 
-    before = model.policy.action_net.scorer[0].weight.detach().clone()
+    before = model.policy.action_net.query.weight.detach().clone()
     model.learn(16)
-    after = model.policy.action_net.scorer[0].weight.detach()
+    after = model.policy.action_net.query.weight.detach()
     env.close()
 
     assert th.isfinite(after).all()

@@ -193,26 +193,35 @@ class SchedulingMlpExtractor(nn.Module):
         return features[:, self.latent_dim_pi :]
 
 
-class SharedActionHead(nn.Module):
-    """Scores each action embedding with a shared MLP.
+class PointerActionHead(nn.Module):
+    """Attention-based pointer scoring for variable-cardinality actions.
 
-    Applied identically to every (machine, job) pair embedding,
-    so the same parameters score 8 jobs or 32 jobs.
+    A learned query vector attends over candidate embeddings to produce
+    action logits. Unlike independent MLP scoring, the query encodes
+    global scheduling intent and candidates compete via dot-product
+    attention. Same parameters score any number of candidates.
+
+    Reference: Bello et al. (2016), Kool et al. (2019) for pointer
+    networks in combinatorial optimization; Decima (Mao et al. 2018)
+    for scheduling-specific pointer policies.
     """
 
     def __init__(self, n_actions: int, embedding_dim: int):
         super().__init__()
         self.n_actions = n_actions
         self.embedding_dim = embedding_dim
-        self.scorer = nn.Sequential(
-            nn.Linear(embedding_dim, embedding_dim),
-            nn.ReLU(),
-            nn.Linear(embedding_dim, 1),
-        )
+        self.query = nn.Linear(embedding_dim, embedding_dim)
+        self.key = nn.Linear(embedding_dim, embedding_dim)
+        self.scale = embedding_dim ** -0.5
 
     def forward(self, features: th.Tensor) -> th.Tensor:
         action_embeddings = features.reshape(-1, self.n_actions, self.embedding_dim)
-        return self.scorer(action_embeddings).squeeze(-1)
+        # Global query: mean pool over all candidates (skip + allocations)
+        query = self.query(action_embeddings.mean(dim=1, keepdim=True))
+        keys = self.key(action_embeddings)
+        # Pointer scores: dot-product attention (batch, n_actions)
+        logits = (query * keys).sum(dim=-1) * self.scale
+        return logits
 
 
 class SchedulingValueNet(nn.Module):
@@ -262,7 +271,7 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
             features_extractor_kwargs={'embedding_dim': embedding_dim},
             **kwargs,
         )
-        self.action_net = SharedActionHead(action_space.n, embedding_dim)
+        self.action_net = PointerActionHead(action_space.n, embedding_dim)
         self.value_net = SchedulingValueNet(embedding_dim)
         self.optimizer = self.optimizer_class(
             self.parameters(),
