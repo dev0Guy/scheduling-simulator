@@ -103,6 +103,10 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
         is_real_job = self._build_job_mask(observations)
         key_padding_mask = ~is_real_job
 
+        # Detect padded machines: all-zero capacity
+        is_real_machine = machine_capacity.sum(dim=(2, 3)) > 0
+        machine_key_padding_mask = ~is_real_machine
+
         job_metadata = th.stack(
             [
                 observations['ttl'].float() / self.time_scale,
@@ -130,7 +134,10 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
         )
         attended = self.job_norm(job_emb + attended)
 
-        cross, _ = self.cross_attention(attended, machine_emb, machine_emb)
+        cross, _ = self.cross_attention(
+            attended, machine_emb, machine_emb,
+            key_padding_mask=machine_key_padding_mask,
+        )
         cross = self.cross_norm(attended + cross)
 
         n_m = machine_emb.shape[1]
@@ -140,7 +147,7 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
         pair_emb = self.pair_scorer(
             th.cat([m_exp, j_exp, m_exp * j_exp], dim=-1)
         )
-        real_mask = is_real_job[:, None, :, None].float()
+        real_mask = is_real_job[:, None, :, None].float() * is_real_machine[:, :, None, None].float()
         pair_emb = pair_emb * real_mask
 
         job_mask_f = is_real_job.unsqueeze(-1).float()
@@ -159,8 +166,9 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
             [skip_emb[:, None, :], pair_emb.flatten(start_dim=1, end_dim=2)], dim=1,
         )
 
-        m_mean = machine_emb.mean(dim=1)
-        m_max = machine_emb.amax(dim=1)
+        m_mask_f = is_real_machine.unsqueeze(-1).float()
+        m_mean = (machine_emb * m_mask_f).sum(dim=1) / m_mask_f.sum(dim=1).clamp(min=1)
+        m_max = machine_emb.masked_fill(~m_mask_f.bool(), float('-inf')).amax(dim=1).nan_to_num(0.0)
         value_state = self.value_encoder(
             th.cat([job_mean, job_max, m_mean, m_max, current_time], dim=-1)
         )
