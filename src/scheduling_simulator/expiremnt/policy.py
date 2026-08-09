@@ -3,6 +3,7 @@ from typing import Any
 import torch as th
 from gymnasium import spaces
 from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy
+from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.type_aliases import Schedule
 from torch import nn
@@ -236,6 +237,53 @@ class SchedulingPolicy(MaskableMultiInputActorCriticPolicy):
     Supports training on one job count and evaluating on another via
     padding + masking. The environment must be constructed with
     max_n_jobs >= any n_jobs used during training or evaluation.
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Dict,
+        action_space: spaces.Space,
+        lr_schedule: Schedule,
+        embedding_dim: int = 64,
+        **kwargs: Any,
+    ):
+        self.scheduling_n_actions = action_space.n
+        self.scheduling_embedding_dim = embedding_dim
+        kwargs.setdefault('optimizer_class', th.optim.AdamW)
+        kwargs.setdefault('optimizer_kwargs', {'weight_decay': 0.01})
+        kwargs.pop('net_arch', None)
+        kwargs.pop('ortho_init', None)
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            net_arch={'pi': [], 'vf': []},
+            ortho_init=False,
+            features_extractor_class=PointerFeaturesExtractor,
+            features_extractor_kwargs={'embedding_dim': embedding_dim},
+            **kwargs,
+        )
+        self.action_net = SharedActionHead(action_space.n, embedding_dim)
+        self.value_net = SchedulingValueNet(embedding_dim)
+        self.optimizer = self.optimizer_class(
+            self.parameters(),
+            lr=lr_schedule(1),
+            **self.optimizer_kwargs,
+        )
+
+    def _build_mlp_extractor(self) -> None:
+        self.mlp_extractor = SchedulingMlpExtractor(
+            self.scheduling_n_actions,
+            self.scheduling_embedding_dim,
+        )
+
+
+class SchedulingPolicyNoMask(MultiInputActorCriticPolicy):
+    """Non-maskable variant for training without action masking.
+
+    Same architecture as SchedulingPolicy but extends MultiInputActorCriticPolicy,
+    so it can be used with regular PPO when we want the policy to learn
+    invalid action avoidance through penalties rather than masking.
     """
 
     def __init__(

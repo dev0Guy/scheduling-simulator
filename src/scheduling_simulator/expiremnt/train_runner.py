@@ -33,8 +33,13 @@ class TrainExperimentRunner:
 
     def run(self) -> None:
         env = self.generate_enviroemnt()
-        eval_env = self.generate_enviroemnt()
-        eval_env.seed(10_000)
+        eval_config = {**self.config, 'n_jobs': 32}
+        eval_env = DummyVecEnv([lambda: Monitor(
+            gym.wrappers.TimeLimit(
+                SchedulingEnviorment(eval_config, render_mode='rgb_array', max_n_jobs=48),
+                max_episode_steps=500,
+            )
+        )])
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
@@ -58,7 +63,7 @@ class TrainExperimentRunner:
                         eval_env,
                         best_model_save_path=f"models/{self._run.id}",
                         log_path=f"models/{self._run.id}",
-                        eval_freq=5_000,
+                        eval_freq=2_500,
                         n_eval_episodes=32,
                         deterministic=True,
                     ),

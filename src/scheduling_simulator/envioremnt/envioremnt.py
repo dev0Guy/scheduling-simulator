@@ -65,6 +65,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         creator: ClusterCreator = generate_deep_rm_cluster,
         render_mode: Literal['human', 'rgb_array'] = 'human',
         max_n_jobs: Optional[int] = None,
+        penalize_invalid: bool = False,
     ) -> None:
         super().__init__()
         self.render_mode = render_mode
@@ -75,6 +76,7 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         self._n_actual = 0
         self._creator = creator
         self._max_n_jobs = max_n_jobs or config['n_jobs']
+        self._penalize_invalid = penalize_invalid
         self.observation_space = gym.spaces.Dict(self._create_observation_space())
         n_actions = 1 + (self._max_n_jobs * self._config['n_machines'])
         self.action_space = gym.spaces.Discrete(n_actions)
@@ -155,11 +157,31 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
             padded_job = (action - 1) % self._max_n_jobs
             machine_idx = (action - 1) // self._max_n_jobs
             if padded_job >= self._n_actual:
-                cluster_action = 0  # padded slot, treat as skip
+                if self._penalize_invalid:
+                    # Return penalty without changing state
+                    result = self._cast(self._last_observation)
+                    return result, -100.0, False, False, {}
+                cluster_action = 0
             else:
                 cluster_action = 1 + machine_idx * self._n_actual + padded_job
 
         previous_observation = self._last_observation
+
+        # Check if the action is valid before stepping
+        if self._penalize_invalid and cluster_action != 0:
+            obs_dict = self._last_observation_dict
+            job_idx = (cluster_action - 1) % self._n_actual
+            machine_idx = (cluster_action - 1) // self._n_actual
+            job_pending = obs_dict['status'][job_idx] == 1
+            job_fits = np.all(
+                obs_dict['machines_usage'][machine_idx]
+                + obs_dict['jobs_usage'][job_idx]
+                <= obs_dict['machines_capacity'][machine_idx]
+            )
+            if not job_pending or not job_fits:
+                result = self._cast(self._last_observation)
+                return result, -100.0, False, False, {}
+
         self._last_observation = self._cluster.step(cluster_action)
         result = self._cast(self._last_observation)
         self._last_observation_dict = result
