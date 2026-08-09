@@ -4,6 +4,7 @@ from scheduling_simulator.core.job import JobStatus
 import numpy as np
 import wandb
 from stable_baselines3.common.callbacks import BaseCallback
+from sb3_contrib.common.maskable.utils import get_action_masks
 
 
 class EpisodesMetrics(TypedDict):
@@ -102,3 +103,62 @@ class CustomMetricsCallback(BaseCallback):
             })
 
         self._update_episode_metrics()
+
+        # Log baseline comparisons every 10 rollouts
+        if self.episode_metrics["count"] % 10 != 0:
+            return
+        baseline_flows = self._eval_baselines(seeds=range(30000, 30010))
+        wandb.log({
+            "baseline/sjf_flow": baseline_flows["sjf"],
+            "baseline/random_flow": baseline_flows["random"],
+            "baseline/learned_flow": baseline_flows["learned"],
+        })
+
+    def _eval_baselines(self, seeds: range) -> dict:
+        """Evaluate SJF, random, and learned policy on a few seeds."""
+        env = self.model.get_env()
+        flows = {"sjf": [], "random": [], "learned": []}
+
+        for seed in seeds:
+            obs = env.reset()
+            rng = np.random.default_rng(seed)
+            done = False
+            while not done:
+                mask = get_action_masks(env)
+                alloc = np.flatnonzero(mask[0, 1:]) + 1
+                if not alloc.size:
+                    action = 0
+                else:
+                    jobs = (alloc - 1) % obs["size"].shape[0]
+                    # SJF: pick shortest job
+                    action = int(alloc[np.argmin(obs["size"][0, jobs])])
+                obs, _, done_arr, _ = env.step([action])
+                done = bool(done_arr[0])
+            flows["sjf"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
+            env.reset()
+
+        for seed in seeds:
+            obs = env.reset()
+            rng = np.random.default_rng(seed)
+            done = False
+            while not done:
+                mask = get_action_masks(env)
+                alloc = np.flatnonzero(mask[0, 1:]) + 1
+                action = int(rng.choice(alloc)) if alloc.size else 0
+                obs, _, done_arr, _ = env.step([action])
+                done = bool(done_arr[0])
+            flows["random"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
+            env.reset()
+
+        for seed in seeds:
+            obs = env.reset()
+            done = False
+            while not done:
+                mask = get_action_masks(env)
+                action, _ = self.model.predict(obs, deterministic=True, action_masks=mask)
+                obs, _, done_arr, _ = env.step(action)
+                done = bool(done_arr[0])
+            flows["learned"].append(float((obs["finished_at"][0] - obs["arrival"][0]).sum()))
+            env.reset()
+
+        return {k: float(np.mean(v)) for k, v in flows.items()}
