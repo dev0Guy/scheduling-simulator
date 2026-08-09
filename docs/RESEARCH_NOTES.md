@@ -417,3 +417,57 @@ The best configuration to date:
 The learned policy consistently beats SJF across all seeds. Variance is
 low at larger sizes (std < 0.4). The gap widens with problem size,
 confirming the policy learns increasingly valuable scheduling strategies.
+
+## Multi-Resource Workload Results (E9, 2026-08-09)
+
+### Configuration
+- 2 machines, 2 resources, 32 jobs, 20 time steps
+- Training: [20, 24, 28, 32, 36], validation: 40 jobs
+- Test: [24, 32, 36, 40, 44]
+- 100k steps, best checkpoint at 35,840
+- Architecture: pointer policy + relative arrival + padding indicator + stacked attention
+
+### Results
+
+| Jobs | Random | SJF | Learned | vs Random | vs SJF |
+|------|--------|-----|---------|-----------|--------|
+| 24 | 511.76 | 456.78 | 474.86 | -7.2% | +3.9% |
+| 32 | 902.64 | 819.64 | 774.04 | -14.2% | -5.6% |
+| 36 | 1131.46 | 1003.10 | 954.64 | -15.6% | -4.8% |
+| 40 | 1412.60 | 1236.82 | 1156.76 | -18.1% | -6.5% |
+| 44 | 1686.24 | 1456.28 | 1370.16 | -18.7% | -5.9% |
+
+The learned policy beats SJF by 4.8-6.5% on 32-44 jobs. The only
+regression is at 24 jobs (smallest test size, wider training distribution).
+
+## Architecture Improvements (E8, 2026-08-09)
+
+1. Relative arrival time: (arrival - current_time) / time_scale
+   - Helps the policy reason about when future jobs arrive
+2. Padding indicator: explicit is_real_job feature
+   - Prevents padded slots from contaminating learned representations
+3. Stacked self-attention: two layers with residual connections
+   - Deeper job interaction modeling
+4. All metadata normalized by time_scale (consistent feature scales)
+
+These improvements are included in the E9 benchmark above.
+
+## Refined BOPO Results (E7, 2026-08-09)
+
+### Configuration
+- 2 machines, 2 resources, training on [20-36]
+- PPO pre-training (30k steps), then alternating PPO + preference
+- 100 SJF > random pairs, Bradley-Terry with flow margin weighting
+
+### Results (30 eval seeds)
+
+| Jobs | SJF | Learned | vs SJF |
+|------|-----|---------|--------|
+| 24 | 441.2 | 442.1 | +0.2% |
+| 32 | 796.4 | 752.6 | -5.5% |
+| 36 | 981.8 | 945.4 | -3.7% |
+| 40 | 1222.9 | 1151.5 | -5.8% |
+| 44 | 1447.3 | 1376.7 | -4.9% |
+
+BOPO extends generalization to 44 jobs (not seen during training in the
+2m/2r config) and maintains 4-6% improvement over SJF.

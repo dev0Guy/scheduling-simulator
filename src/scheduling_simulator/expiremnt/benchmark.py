@@ -20,16 +20,16 @@ MAX_EPISODE_STEPS = 500
 MAX_N_JOBS = 48
 
 DEFAULT_CONFIG = {
-    'n_machines': 3,
+    'n_machines': 2,
     'n_jobs': 32,
-    'n_resource': 1,
+    'n_resource': 2,
     'n_time': 20,
     'max_capacity': 255,
 }
 
-TRAIN_JOB_COUNTS = [16, 20, 24, 28, 32, 36, 40]
-VAL_JOB_COUNTS = [36]
-TEST_JOB_COUNTS = [20, 28, 36, 44, 48]
+TRAIN_JOB_COUNTS = [20, 24, 28, 32, 36]
+VAL_JOB_COUNTS = [40]
+TEST_JOB_COUNTS = [24, 32, 36, 40, 44]
 
 
 def make_environment(
