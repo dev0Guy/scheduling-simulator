@@ -48,12 +48,13 @@ def make_environment(
 
 
 def _make_env_fn(config: dict, idx: int, randomize_seed: bool = False):
+    rng = np.random.default_rng(idx)
     def _fn():
         if randomize_seed:
-            n_jobs = int(np.random.choice(TRAIN_JOB_COUNTS))
+            n_jobs = int(rng.choice(TRAIN_JOB_COUNTS))
             train_config = {**config, 'n_jobs': n_jobs}
             env = make_environment(train_config)
-            env.reset(seed=np.random.randint(0, 2**31))
+            env.reset(seed=int(rng.randint(0, 2**31)))
         else:
             env = make_environment(config)
             env.reset(seed=idx)
