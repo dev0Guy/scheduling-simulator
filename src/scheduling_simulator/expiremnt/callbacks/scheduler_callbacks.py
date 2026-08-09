@@ -104,7 +104,7 @@ class CustomMetricsCallback(BaseCallback):
 
         self._update_episode_metrics()
 
-        # Log baseline comparisons every 10 rollouts
+        # Log baseline comparisons every 5 rollouts
         if self.episode_metrics["count"] % 5 != 0:
             return
         baseline_flows = self._eval_baselines(seeds=range(30000, 30005))
@@ -112,8 +112,6 @@ class CustomMetricsCallback(BaseCallback):
             "baseline/sjf_flow": baseline_flows["sjf"],
             "baseline/random_flow": baseline_flows["random"],
             "baseline/learned_flow": baseline_flows["learned"],
-            "baseline/learned_unmasked_flow": baseline_flows["learned_unmasked"],
-            "baseline/unmasked_invalid_pct": baseline_flows["unmasked_invalid_pct"],
         })
 
     def _eval_baselines(self, seeds: range) -> dict:
@@ -134,7 +132,7 @@ class CustomMetricsCallback(BaseCallback):
                 max_episode_steps=500,
             ))
 
-        flows = {"sjf": [], "random": [], "learned": [], "learned_unmasked": [], "unmasked_invalid_pct": []}
+        flows = {"sjf": [], "random": [], "learned": []}
         n_jobs = eval_config['n_jobs']
 
         for seed in seeds:
@@ -179,28 +177,6 @@ class CustomMetricsCallback(BaseCallback):
                 if term or trunc:
                     break
             flows["learned"].append(float((obs['finished_at'] - obs['arrival']).sum()))
-            env.close()
-
-            # Learned (unmasked) — no oracle mask, policy must avoid
-            # invalid actions on its own. Invalid actions waste a step;
-            # we count them to measure validity learning.
-            env = make_eval()
-            obs, _ = env.reset(seed=seed)
-            invalid_count = 0
-            total_count = 0
-            while True:
-                action, _ = self.model.predict(obs, deterministic=False)
-                total_count += 1
-                mask = get_action_masks(env)
-                if not mask[int(action)]:
-                    invalid_count += 1
-                    obs, _, term, trunc, _ = env.step(0)
-                else:
-                    obs, _, term, trunc, _ = env.step(int(action))
-                if term or trunc:
-                    break
-            flows["learned_unmasked"].append(float((obs['finished_at'] - obs['arrival']).sum()))
-            flows["unmasked_invalid_pct"].append(100.0 * invalid_count / max(total_count, 1))
             env.close()
 
         return {k: float(np.mean(v)) for k, v in flows.items()}

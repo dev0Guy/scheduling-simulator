@@ -1,3 +1,4 @@
+from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import CallbackList
 import wandb
@@ -10,7 +11,7 @@ from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from wandb.integration.sb3 import WandbCallback
 
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
-from scheduling_simulator.expiremnt.policy import SchedulingPolicy, ValidityPPO, get_auto_device
+from scheduling_simulator.expiremnt.policy import SchedulingPolicy, get_auto_device
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -42,28 +43,27 @@ class TrainExperimentRunner:
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
-        model = ValidityPPO(
+        model = MaskablePPO(
             SchedulingPolicy,
             env,
-            learning_rate=3e-4,
-n_steps=512,
-            batch_size=128,
+            learning_rate=lambda progress: 3e-4 if progress > 0.5 else 1e-5 + (3e-4 - 1e-5) * progress * 2,
+            n_steps=512,
+            batch_size=64,
             gamma=1.0,
             gae_lambda=0.95,
             ent_coef=0.02,
-            n_epochs=6,
+            n_epochs=4,
             max_grad_norm=0.5,
             verbose=1,
             device=get_auto_device(),
-            validity_coef=lambda progress: 0.0 if progress > 0.5 else (0.5 * (0.5 - progress) / 0.25 if progress > 0.25 else 0.5),
             tensorboard_log=f"runs/{self._run.id}"
         )
-        model.learn(100_000, callback=CallbackList([
+        model.learn(50_000, callback=CallbackList([
                     MaskableEvalCallback(
                         eval_env,
                         best_model_save_path=f"models/{self._run.id}",
                         log_path=f"models/{self._run.id}",
-                        eval_freq=5_000,
+                        eval_freq=2_500,
                         n_eval_episodes=32,
                         deterministic=False,
                     ),
@@ -74,7 +74,7 @@ n_steps=512,
                     ),
                     CustomMetricsCallback()
                 ]))
-        model = ValidityPPO.load(f"models/{self._run.id}/best_model", env=env)
+        model = MaskablePPO.load(f"models/{self._run.id}/best_model", env=env)
         model.save(f"models/{self._run.id}/final_model")
         model_path = f"models/{self._run.id}/final_model.zip"
         wandb.save(model_path)
@@ -84,10 +84,14 @@ n_steps=512,
 
     def generate_enviroemnt(self):
         max_n_jobs = 48
-        job_counts = [20, 24, 28, 32, 36, 40]
+        small_counts = [20, 24]
+        large_counts = [28, 32, 36]
 
         def _make_env():
-            n_jobs = int(np.random.choice(job_counts))
+            if np.random.random() < 0.8:
+                n_jobs = int(np.random.choice(small_counts))
+            else:
+                n_jobs = int(np.random.choice(large_counts))
             train_config = {**self.config, 'n_jobs': n_jobs}
             return Monitor(
                 gym.wrappers.TimeLimit(
@@ -100,5 +104,5 @@ n_steps=512,
                 )
             )
 
-        envs = DummyVecEnv([_make_env for _ in range(8)])
+        envs = DummyVecEnv([_make_env for _ in range(4)])
         return envs

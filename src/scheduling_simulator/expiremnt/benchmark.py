@@ -164,7 +164,7 @@ def evaluate(
                 action = int(
                     model.predict(
                         observation,
-                        deterministic=True,
+                        deterministic=False,
                         action_masks=mask,
                     )[0]
                 )
