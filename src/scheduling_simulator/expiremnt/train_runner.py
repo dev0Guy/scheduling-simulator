@@ -11,6 +11,7 @@ from wandb.integration.sb3 import WandbCallback
 
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
 from scheduling_simulator.expiremnt.policy import SchedulingPolicy, ValidityPPO, get_auto_device
+from prodigyopt import Prodigy
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -45,7 +46,11 @@ class TrainExperimentRunner:
         model = ValidityPPO(
             SchedulingPolicy,
             env,
-            learning_rate=lambda progress: 1e-5 + (3e-4 - 1e-5) * progress,
+            learning_rate=1.0,
+            policy_kwargs={
+                'optimizer_class': Prodigy,
+                'optimizer_kwargs': {'lr': 1.0, 'weight_decay': 0.01},
+            },
             n_steps=512,
             batch_size=128,
             gamma=1.0,
