@@ -544,3 +544,34 @@ complexity without improving results. Reverted to the simpler version.
 Always A/B test architecture changes. Features that seem theoretically
 beneficial can hurt by adding parameters that dilute the learning signal
 on small problems.
+
+## Final Benchmark: Simplified Policy (2026-08-09)
+
+### Configuration
+- 2 machines, 2 resources, 20 time steps, max_capacity=255
+- Simplified policy: single self-attention + cross-attention, raw arrival,
+  no stacked layers, no padding indicator in metadata
+- Training: 80% [20,24], 20% [28,32,36], 100k steps, early stopping
+- 3 training seeds, 30 eval seeds each
+
+### Results
+
+| Jobs | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
+|------|--------|--------|--------|------|-----|
+| 24 | +0.6% | -0.2% | +0.2% | +0.2% | 0.33 |
+| 32 | -6.2% | -4.5% | -5.8% | -5.5% | 0.73 |
+| 40 | -7.1% | -6.1% | -6.8% | -6.7% | 0.42 |
+| 44 | -6.4% | -5.0% | -6.2% | -5.9% | 0.62 |
+
+### Comparison: Simplified vs Stacked (previous multi-seed)
+
+| Size | Stacked mean | Simplified mean | Delta |
+|------|-------------|-----------------|-------|
+| 24 | +0.5% | +0.2% | -0.3pp |
+| 32 | -5.3% | -5.5% | -0.2pp |
+| 40 | -6.7% | -6.7% | 0.0pp |
+| 44 | -5.8% | -5.9% | -0.1pp |
+
+The simplified policy matches or slightly improves the stacked version
+while having fewer parameters. Confirms the A/B finding: the E8
+additions were unnecessary.
