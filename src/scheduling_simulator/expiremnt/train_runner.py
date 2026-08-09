@@ -49,7 +49,7 @@ class TrainExperimentRunner:
             learning_rate=1.0,
             policy_kwargs={
                 'optimizer_class': Prodigy,
-                'optimizer_kwargs': {'lr': 1.0, 'weight_decay': 0.01},
+                'optimizer_kwargs': {'weight_decay': 0.01},
             },
             n_steps=512,
             batch_size=128,
