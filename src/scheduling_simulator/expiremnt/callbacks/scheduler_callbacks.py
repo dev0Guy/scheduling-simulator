@@ -112,6 +112,8 @@ class CustomMetricsCallback(BaseCallback):
             "baseline/sjf_flow": baseline_flows["sjf"],
             "baseline/random_flow": baseline_flows["random"],
             "baseline/learned_flow": baseline_flows["learned"],
+            "baseline/learned_unmasked_flow": baseline_flows["learned_unmasked"],
+            "baseline/unmasked_invalid_pct": baseline_flows["unmasked_invalid_pct"],
         })
 
     def _eval_baselines(self, seeds: range) -> dict:
@@ -132,7 +134,7 @@ class CustomMetricsCallback(BaseCallback):
                 max_episode_steps=500,
             ))
 
-        flows = {"sjf": [], "random": [], "learned": []}
+        flows = {"sjf": [], "random": [], "learned": [], "learned_unmasked": [], "unmasked_invalid_pct": []}
         n_jobs = eval_config['n_jobs']
 
         for seed in seeds:

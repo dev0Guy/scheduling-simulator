@@ -1,4 +1,3 @@
-from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import CallbackList
 import wandb
@@ -11,7 +10,7 @@ from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from wandb.integration.sb3 import WandbCallback
 
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
-from scheduling_simulator.expiremnt.policy import SchedulingPolicy, get_auto_device
+from scheduling_simulator.expiremnt.policy import SchedulingPolicy, ValidityPPO, get_auto_device
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -43,7 +42,7 @@ class TrainExperimentRunner:
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
-        model = MaskablePPO(
+        model = ValidityPPO(
             SchedulingPolicy,
             env,
             learning_rate=lambda progress: 3e-4 if progress > 0.5 else 1e-5 + (3e-4 - 1e-5) * progress * 2,
@@ -56,6 +55,7 @@ class TrainExperimentRunner:
             max_grad_norm=0.5,
             verbose=1,
             device=get_auto_device(),
+            validity_coef=0.5,
             tensorboard_log=f"runs/{self._run.id}"
         )
         model.learn(50_000, callback=CallbackList([
