@@ -105,9 +105,9 @@ class CustomMetricsCallback(BaseCallback):
         self._update_episode_metrics()
 
         # Log baseline comparisons every 10 rollouts
-        if self.episode_metrics["count"] % 10 != 0:
+        if self.episode_metrics["count"] % 5 != 0:
             return
-        baseline_flows = self._eval_baselines(seeds=range(30000, 30010))
+        baseline_flows = self._eval_baselines(seeds=range(30000, 30005))
         wandb.log({
             "baseline/sjf_flow": baseline_flows["sjf"],
             "baseline/random_flow": baseline_flows["random"],
