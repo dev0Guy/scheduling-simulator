@@ -45,25 +45,25 @@ class TrainExperimentRunner:
         model = ValidityPPO(
             SchedulingPolicy,
             env,
-            learning_rate=lambda progress: 3e-4 if progress > 0.5 else 1e-5 + (3e-4 - 1e-5) * progress * 2,
-            n_steps=512,
-            batch_size=64,
+            learning_rate=1e-4,
+            n_steps=2048,
+            batch_size=256,
             gamma=1.0,
             gae_lambda=0.95,
-            ent_coef=0.02,
-            n_epochs=4,
+            ent_coef=0.01,
+            n_epochs=10,
             max_grad_norm=0.5,
             verbose=1,
             device=get_auto_device(),
             validity_coef=0.5,
             tensorboard_log=f"runs/{self._run.id}"
         )
-        model.learn(50_000, callback=CallbackList([
+        model.learn(200_000, callback=CallbackList([
                     MaskableEvalCallback(
                         eval_env,
                         best_model_save_path=f"models/{self._run.id}",
                         log_path=f"models/{self._run.id}",
-                        eval_freq=2_500,
+                        eval_freq=5_000,
                         n_eval_episodes=32,
                         deterministic=True,
                     ),
@@ -74,7 +74,7 @@ class TrainExperimentRunner:
                     ),
                     CustomMetricsCallback()
                 ]))
-        model = MaskablePPO.load(f"models/{self._run.id}/best_model", env=env)
+        model = ValidityPPO.load(f"models/{self._run.id}/best_model", env=env)
         model.save(f"models/{self._run.id}/final_model")
         model_path = f"models/{self._run.id}/final_model.zip"
         wandb.save(model_path)
@@ -84,14 +84,10 @@ class TrainExperimentRunner:
 
     def generate_enviroemnt(self):
         max_n_jobs = 48
-        small_counts = [20, 24]
-        large_counts = [28, 32, 36]
+        job_counts = [20, 24, 28, 32, 36, 40]
 
         def _make_env():
-            if np.random.random() < 0.8:
-                n_jobs = int(np.random.choice(small_counts))
-            else:
-                n_jobs = int(np.random.choice(large_counts))
+            n_jobs = int(np.random.choice(job_counts))
             train_config = {**self.config, 'n_jobs': n_jobs}
             return Monitor(
                 gym.wrappers.TimeLimit(
@@ -104,5 +100,5 @@ class TrainExperimentRunner:
                 )
             )
 
-        envs = DummyVecEnv([_make_env])
+        envs = DummyVecEnv([_make_env for _ in range(4)])
         return envs
