@@ -161,7 +161,6 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
 
         previous_observation = self._last_observation
         self._last_observation = self._cluster.step(cluster_action)
-        self._n_actual = self._last_observation.to_dict()['status'].shape[0]
         result = self._cast(self._last_observation)
         self._last_observation_dict = result
         reward = self._reward_function(self._last_observation, previous_observation)
