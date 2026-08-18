@@ -12,7 +12,7 @@ class RandomScheduler(Scheduler):
     def select(self, observation: 'ObservationDict') -> tuple[bool, int, int]:
         options = self.options(observation)
 
-        if options is None:
+        if not options:
             return True, 0, 0
 
         idx = self._rng.integers(len(options))

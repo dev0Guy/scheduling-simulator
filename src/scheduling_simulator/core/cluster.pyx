@@ -224,6 +224,8 @@ cdef class Cluster:
                 self.observation.action_success = False
                 logging.info(f"Allocation Failed, job: '{selected_job}', machine: '{selected_machine}'")
 
+        self.observation = self.create_observation()
+        self.observation.action_success = allocation_succsued if not action.skip else True
         self.update_observation()
         return self.observation
 

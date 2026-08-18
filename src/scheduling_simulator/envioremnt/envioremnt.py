@@ -1,11 +1,14 @@
 from typing_extensions import Callable
 from scheduling_simulator.core.cluster import Observation, Cluster
+from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.core.render import Renderer
 from scheduling_simulator.core.creator import generate_cluster_python
 from typing import Literal, Any, Optional, TYPE_CHECKING
 import gymnasium as gym
 import numpy as np
 from gymnasium.core import RenderFrame
+
+from scheduling_simulator.scheduler.abc_scheduler import Scheduler
 
 if TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -18,37 +21,85 @@ ClusterCreator = Callable[['ClusterGenerationConfig', np.random.Generator], Clus
 def defualt_reward_function(current_observation: Observation, prev_observation: Optional[Observation]) -> float:
     return -1
 
+def flow_time_reward(current_observation, prev_observation):
+    if prev_observation is None:
+        return 0.0
+    current = current_observation.to_dict()
+    previous = prev_observation.to_dict()
+    elapsed = current['time'] - previous['time']
+
+    if elapsed == 0 and not current['action_success']:
+        return -5.0  # wasted an allocation attempt on an invalid pair
+    if elapsed > 0:
+        active = np.count_nonzero((previous['status'] == JobStatus.RUNNING) | (previous['status'] == JobStatus.PENDING))
+        return -float(active)
+    return -float(np.count_nonzero(previous['status'] == JobStatus.PENDING))
+
+
 def generate_deep_rm_cluster(config: 'ClusterGenerationConfig', random: np.random.Generator) -> Cluster:
     return generate_cluster_python(config, random)
 
 
 class SchedulingEnviorment(gym.Env['ObservationDict', int]):
     _config: 'ClusterGenerationConfig'
-    _renderer: Renderer
+    _renderer: Optional[Renderer]
     _creator: ClusterCreator
     _last_observation: Optional[Observation]
     _cluster: Cluster
     _rewarder: RewardFunction
 
-    metadata = {'render_modes': ['rgb_array', 'huamn']}
+    metadata = {'render_modes': ['rgb_array', 'huamn', 'none']}
 
     def __init__(
         self,
         config: 'ClusterGenerationConfig',
-        reward_function: RewardFunction = defualt_reward_function,
+        reward_function: RewardFunction = flow_time_reward,
         creator: ClusterCreator = generate_deep_rm_cluster,
-        render_mode: Literal['human', 'rgb_array'] = 'human',
+        render_mode: Literal['human', 'rgb_array', 'none'] = 'human',
     ) -> None:
         super().__init__()
         self.render_mode = render_mode
         self._config = config
-        self._reward_function = reward_function
-        self._renderer = Renderer(self.render_mode == 'human')
+        self._reward_function = self.flow_time_reward_improved#reward_function
+        self._renderer = None
+        if self.render_mode != 'none':
+            self._renderer = Renderer(self.render_mode == 'human')
         self._creator = creator
         self.observation_space = gym.spaces.Dict(self._create_observation_space())
         n_actions = 1 + (self._config['n_jobs'] * self._config['n_machines'])
         self.action_space = gym.spaces.Discrete(n_actions)
         self._last_action = (0, 0, 0)
+
+
+
+    def flow_time_reward_improved(self, current_observation, prev_observation):
+        if prev_observation is None:
+            return 0.0
+        current = current_observation.to_dict()
+        previous = prev_observation.to_dict()
+        elapsed = current['time'] - previous['time']
+
+        if elapsed == 0 and not current['action_success']:
+            active = np.count_nonzero((previous['status'] == JobStatus.RUNNING) | (previous['status'] == JobStatus.PENDING))
+            return -active * (1 + self._consecutive_failures)
+
+        if elapsed > 0:
+            active = np.count_nonzero((previous['status'] == JobStatus.RUNNING) | (previous['status'] == JobStatus.PENDING))
+            return -float(active)
+        return -float(np.count_nonzero(previous['status'] == JobStatus.PENDING))
+
+
+    def action_masks(self) -> np.ndarray:
+        if self._last_observation is None:
+            raise ValueError()
+        options = Scheduler.options(self._last_observation.to_dict())
+        possible_actions = [0] + [
+            self._cluster.allocation_to_action(machine_idx, job_idx)
+            for job_idx, machine_idx in options
+        ]
+        mask = np.zeros(self.action_space.n, dtype=bool)
+        mask[possible_actions] = True
+        return mask
 
     def _create_observation_space(self) -> dict:
         n_jobs = self._config['n_jobs']
@@ -88,25 +139,34 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
         }
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple['ObservationDict', Information]:
+        super().reset(seed=seed)
+        self._consecutive_failures = 0
         self._cluster = self._creator(self._config, np.random.default_rng(seed))
         self._last_observation = self._cluster.get_observation()
-        self._last_action = (0, 0, 0)
         return self._cast(self._last_observation), {}
 
     def step(self, action: int) -> tuple['ObservationDict', float, bool, bool, Information]:
-        self._last_action = self._cluster.action_to_value(action)
         previous_observation = self._last_observation
         self._last_observation = self._cluster.step(action)
+        obs_dict = self._last_observation.to_dict()
+        if not obs_dict['action_success'] and action != 0:
+            self._consecutive_failures += 1
+        else:
+            self._consecutive_failures = 0
+
         reward = self._reward_function(self._last_observation, previous_observation)
         terminated = self._cluster.has_all_jobs_been_completed()
-
-        return self._cast(self._last_observation), reward, terminated, False, {}
+        observation = self._cast(self._last_observation)
+        return observation, reward, terminated, False, {}
 
     def render(self) -> Optional[RenderFrame]:
-        if self._last_observation is None:
+        if self._last_observation is None or self._renderer is None:
             return None
 
         return self._renderer.render(self._last_observation, self._last_action)
 
     def close(self) -> None:
+        if self._renderer is None:
+            return
+
         self._renderer.close()

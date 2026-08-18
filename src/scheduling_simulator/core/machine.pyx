@@ -30,6 +30,10 @@ cdef class Machine:
                 new_cell_value = self.usage[i, j] + job_usage[i, j]
                 if new_cell_value > self.capacity[i, j]:
                     return False
+
+        for i in range(rows):
+            for j in range(cols):
+                new_cell_value = self.usage[i, j] + job_usage[i, j]
                 self.usage[i, j] = new_cell_value
 
         return True

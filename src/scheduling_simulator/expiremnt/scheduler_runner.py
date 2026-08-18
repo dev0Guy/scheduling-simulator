@@ -1,4 +1,3 @@
-from collections import defaultdict
 from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 from stable_baselines3.common.monitor import Monitor
 import wandb
@@ -6,7 +5,6 @@ import typing as tp
 import numpy as np
 from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
-
 import glob
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
@@ -48,14 +46,7 @@ class RandomBaselineRunner:
         env.close()
         wandb.finish()
 
-    def _encode_action(self, skip: bool, dim1: int, dim2: int, n_dim2: int) -> int:
-        if skip:
-            return 0
-        return 1 + dim1 * n_dim2 + dim2
-
-    def _evaluate(self, envs, *, n_episodes: int) -> None:
-        n_dim2 = envs.get_attr("n_machines")[0]
-
+    def _evaluate(self, envs: DummyVecEnv, *, n_episodes: int) -> None:
         for ep in range(n_episodes):
             envs.seed(self.seed + ep)
             obs = envs.reset()
@@ -64,8 +55,7 @@ class RandomBaselineRunner:
             allocations = 0
             while not done:
                 steps += 1
-                skip, dim1, dim2 = self.scheduler.select(obs)
-                action = self._encode_action(skip, dim1, dim2, n_dim2)
+                skip, machine_idx, job_idx = self.scheduler.select(obs)
                 obs, reward, done, infos = envs.step(np.array([action]))
                 total_reward += reward
                 allocations += int(not skip and obs['action_success'])
@@ -102,6 +92,6 @@ class RandomBaselineRunner:
             envs,
             path,
             record_video_trigger=lambda x: x % 10_000 == 0,
-            video_length=200,
+            video_length=1_000,
         )
         return envs

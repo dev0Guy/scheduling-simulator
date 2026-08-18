@@ -72,6 +72,7 @@ cdef class Renderer:
     def __init__(self, bint to_screen = True, Configuration config = DefulatConfiguration):
         pygame.init()
         self.to_screen = to_screen
+        self.config = config
 
         if self.to_screen:
             self.screen = pygame.display.set_mode((self.config.width, self.config.height))
@@ -79,9 +80,6 @@ cdef class Renderer:
         else:
             self.screen = pygame.Surface((self.config.width, self.config.height))
 
-        self.config = config
-        self.screen = pygame.display.set_mode((self.config.width, self.config.height))
-        pygame.display.set_caption("Environment Renderer")
         self.font = pygame.font.SysFont("Consolas", self.config.primary_title_font_size)
         self.small_font = pygame.font.SysFont("Consolas", self.config.secondary_title_font_size)
 

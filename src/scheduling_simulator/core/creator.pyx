@@ -26,17 +26,25 @@ cdef deeprm_generate_single_job(ClusterGenerationConfig config, object random):
         int dominant_resource = random.integers(0, config.n_resource)
         int resource_idx
         int[:, ::1] usage = np.zeros((config.n_resource, config.n_time), dtype=np.int32)
-        int size = 5
+        int size = random.integers(1, config.n_time + 1)
+        int arrival_time = random.integers(0, config.n_time)
+        int dominant_low = max(1, config.max_capacity // 4)
+        int dominant_high = max(dominant_low + 1, (3 * config.max_capacity) // 4)
+        int secondary_low = max(1, config.max_capacity // 20)
+        int secondary_high = max(secondary_low + 1, config.max_capacity // 4)
 
     for resource_idx in range(config.n_resource):
 
         if resource_idx == dominant_resource:
-            usage[resource_idx, :] = random.integers(127, 200, dtype=np.int32)
+            usage[resource_idx, :size] = random.integers(
+                dominant_low, dominant_high, dtype=np.int32
+            )
         else:
-            usage[resource_idx, :] = random.integers(26, 52, dtype=np.int32)
+            usage[resource_idx, :size] = random.integers(
+                secondary_low, secondary_high, dtype=np.int32
+            )
 
-    usage[:, size:] = 0
-    return Job(usage=usage, arrival_time=0, size=size)
+    return Job(usage=usage, arrival_time=arrival_time, size=size)
 
 
 cdef list[Job] deeprm_capcity_jobs(ClusterGenerationConfig config, object random):

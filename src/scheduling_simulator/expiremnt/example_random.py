@@ -11,17 +11,17 @@ if  TYPE_CHECKING:
 
 def main() -> None:
     config: 'ClusterGenerationConfig' = {
-        'n_machines': 1,
+        'n_machines': 2,
         'n_jobs': 10,
-        'n_resource': 1,
-        'n_time': 1,
+        'n_resource': 3,
+        'n_time': 10,
         'max_capacity': 255
     }
     runner = RandomBaselineRunner(
         config=config,
-        evalution_steps=100,
+        evalution_steps=10,
         max_time=250,
-        seed=42,
+        seed=32,
     )
     runner.run()
 

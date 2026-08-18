@@ -16,20 +16,23 @@ if tp.TYPE_CHECKING:
 config: 'ClusterGenerationConfig' = {
     'n_machines': 1,
     'n_jobs': 10,
-    'n_resource': 1,
-    'n_time': 1,
-    'max_capacity': 255
+    'n_resource': 3,
+    'n_time': 10,
+    'max_capacity': 255,
 }
+
+# TODO: add eval each x train steps  (save it in validation folder)
+# Run the same with wandb
+# TODO: add scheduler train that train episode only when time is skiped,
+#  and run all combination of the item and make sure they are the same
 runner = ExperimentRunner(
     config,
-    train_steps=200_000,
-    evalution_steps=500,
-    policy_kwargs=dict(
-        # features_extractor_class=SchedulingFeaturesExtractor,
-        # features_extractor_kwargs=dict(cnn_out_dim=64, mlp_out_dim=64),
-        net_arch=[512, 1024, 512, 128, 32],
-    ),
-    max_time=20
+    train_steps=500_000,
+    evalution_steps=100,
+    policy_kwargs=dict(),
+    max_time=300,
+    run_with_wandb=True,
+    eval_every_steps=50_000
 )
 runner.run()
 # env = SchedulingEnviorment(config, render_mode='human')

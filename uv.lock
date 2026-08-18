@@ -2360,6 +2360,18 @@ wheels = [
 ]
 
 [[package]]
+name = "sb3-contrib"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "stable-baselines3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/8e/476222d88ba09dce0feebf6fb30b55e4dd0c80be5b19dc7b40d12d70752a/sb3_contrib-2.9.0.tar.gz", hash = "sha256:6e839c669552ecb3deb616a42ea98ed5e6c599eb5ac5f86232415b87a3873699", size = 90312 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/06/add3f1d6250f58ca493830ddb2118975aa3c4433bc07662d5ac5089eb691/sb3_contrib-2.9.0-py3-none-any.whl", hash = "sha256:b492b2be792f8f8214ff6b984e94812dc877f809ae82302cbe00626442ae316a", size = 93042 },
+]
+
+[[package]]
 name = "scheduling-simulator"
 version = "0.1.0"
 source = { editable = "." }
@@ -2395,6 +2407,7 @@ dev = [
 ]
 experiments = [
     { name = "gymnasium", extra = ["box2d", "other"] },
+    { name = "sb3-contrib" },
     { name = "stable-baselines3", extra = ["extra"] },
     { name = "wandb" },
 ]
@@ -2429,6 +2442,7 @@ dev = [
 ]
 experiments = [
     { name = "gymnasium", extras = ["box2d", "other"], specifier = ">=1.3.0" },
+    { name = "sb3-contrib", specifier = ">=2.7.0" },
     { name = "stable-baselines3", extras = ["extra"], specifier = ">=2.3.2" },
     { name = "wandb", specifier = ">=0.28.1" },
 ]
