@@ -1,22 +1,21 @@
-from math import ceil
+import logging
 from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CallbackList, EvalCallback
 import wandb
 import typing as tp
 import numpy as np
-from sb3_contrib import MaskablePPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from wandb.integration.sb3 import WandbCallback
 import gymnasium as gym
-from sb3_contrib.common.wrappers import ActionMasker
 
 import glob
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
+from scheduling_simulator.expiremnt.runners.env_factory import generate_scheduling_env
 from scheduling_simulator.expiremnt.callbacks.entconf_callback import EntCoefScheduler
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
 from scheduling_simulator.expiremnt.policy.schedule import SchedulingPolicy
@@ -25,6 +24,13 @@ if tp.TYPE_CHECKING:
     from scheduling_simulator.core.cluster import ObservationDict
     from scheduling_simulator.core.creator import ClusterGenerationConfig
 
+
+def _unbatch(obs: dict) -> dict:
+    """Strip the leading vec-env batch dimension."""
+    return {
+        k: (v[0] if isinstance(v, np.ndarray) and v.ndim > 0 else v)
+        for k, v in obs.items()
+    }
 
 
 def get_auto_device() -> str:
@@ -41,8 +47,6 @@ def get_auto_device() -> str:
         return 'mps'
     return 'cpu'
 
-def mask_fn(env):
-    return env.action_masks()
 
 class ExperimentRunner:
 
@@ -126,13 +130,15 @@ class ExperimentRunner:
         eval_env.close()
         return model
 
-    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42) -> None:
+    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 5) -> None:
         print("Evaluation")
-        # envs = self.generate_enviroemnt(f"videos/evaluation/{self.run_id}", with_video=True, n_env=1)
+        n_jobs = self.config['n_jobs']
+
         for ep in range(n_episodes):
+            record_this_ep = (ep % video_every == 0)
             envs = self.generate_enviroemnt(
                 f"videos/evaluation/{self.run_id}/ep_{ep}",
-                with_video=True,
+                with_video=record_this_ep,
                 n_env=1,
             )
             envs.seed(seed + ep)
@@ -140,57 +146,71 @@ class ExperimentRunner:
             obs: 'ObservationDict'
             total_reward, steps, done = 0.0, 0, False
             allocations = 0
+            final_obs = None
+
             while not done:
                 steps += 1
                 action, _states = model.predict(obs, deterministic=True)
                 obs, reward, done_arr, infos = envs.step(action)
                 done = bool(done_arr[0])
                 total_reward += float(reward[0])
-                allocations += int(action[0] != 0 and obs['action_success'][0])
 
-            completed_count = np.sum(obs['status'] == JobStatus.COMPLETED)
-            running_count = np.sum(obs['status'] == JobStatus.RUNNING)
-            pending_count = np.sum(obs['status'] == JobStatus.PENDING)
-            not_created_count = np.sum(obs['status'] == JobStatus.NOT_CREATED)
+                # DummyVecEnv auto-resets on done: `obs` on the terminal
+                # step is already the NEXT episode's reset observation.
+                # The true final observation lives in infos[0]['terminal_observation'].
+                if done:
+                    final_obs = _unbatch(infos[0].get('terminal_observation', obs))
+                else:
+                    final_obs = _unbatch(obs)
+
+                allocations += int(action[0] != 0 and final_obs['action_success'])
+
+            # Sanity check: each of the n_jobs jobs can only be
+            # successfully allocated once per episode (job status moves
+            # strictly NOT_CREATED -> PENDING -> RUNNING -> COMPLETED,
+            # never back to PENDING, and jobs aren't replenished mid-episode
+            # — see job.pyx/creator.pyx). If this ever fires, it means the
+            # observation being used for the success/failure check is
+            # stale (e.g. an auto-reset obs) rather than the real one.
+            if allocations > n_jobs:
+                logging.warning(
+                    "eval episode %d: counted %d allocations but only %d jobs exist "
+                    "— likely a stale/auto-reset observation bug, not real behavior.",
+                    ep, allocations, n_jobs,
+                )
+
+            completed_count = np.sum(final_obs['status'] == JobStatus.COMPLETED)
+            running_count = np.sum(final_obs['status'] == JobStatus.RUNNING)
+            pending_count = np.sum(final_obs['status'] == JobStatus.PENDING)
+            not_created_count = np.sum(final_obs['status'] == JobStatus.NOT_CREATED)
 
             information = {
                 "evaluation/episode": ep,
                 "eval/length": steps,
-                "eval/avg_wait_time": np.mean(obs['wait_time']),
-                "eval/max_wait_time": np.max(obs['wait_time']),
+                "eval/avg_wait_time": np.mean(final_obs['wait_time']),
+                "eval/max_wait_time": np.max(final_obs['wait_time']),
                 "eval/allocations": allocations,
-                "eval/time": obs['time'],
+                "eval/time": float(np.asarray(final_obs['time']).squeeze()),
                 "eval/scheduled": completed_count + running_count,
                 "eval/pending": pending_count,
                 "eval/not_created": not_created_count,
                 "eval/reward": total_reward,
-                "eval/avg_completion_time": (obs['wait_time'] + obs['ttl']).mean(),
+                "eval/avg_completion_time": (final_obs['wait_time'] + final_obs['ttl']).mean(),
             }
             envs.close()
             if self.run_with_wandb:
                 wandb.log(information)
-                for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
-                    wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
+                if record_this_ep:
+                    for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
+                        wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
             else:
                 print(information)
 
-
     def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4):
-        render_mode = 'rgb_array' if with_video else 'none'
-
-        def make_env():
-            _env = gym.wrappers.TimeLimit(
-                SchedulingEnviorment(self.config, render_mode=render_mode),
-                max_episode_steps=self.max_time,
-            )
-            return Monitor(_env)
-
-        envs = DummyVecEnv([make_env for _ in range(n_env)])
-        if with_video:
-            envs = VecVideoRecorder(
-                envs,
-                path,
-                record_video_trigger=lambda x: x == 0,
-                video_length=500,
-            )
-        return envs
+        return generate_scheduling_env(
+            config=self.config,
+            max_time=self.max_time,
+            path=path,
+            with_video=with_video,
+            n_env=n_env,
+        )

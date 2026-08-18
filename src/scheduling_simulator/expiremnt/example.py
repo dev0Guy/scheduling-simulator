@@ -1,5 +1,3 @@
-# TODO: Add Render where selected action is with color
-# TODO: add metric of number of completed job
 import typing as tp
 
 from stable_baselines3.dqn import DQN
@@ -8,7 +6,7 @@ from stable_baselines3.common.env_checker import check_env
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
 from scheduling_simulator.expiremnt.feature_extractor.features_extractor import SchedulingFeaturesExtractor
-from scheduling_simulator.expiremnt.train_runner import ExperimentRunner
+from scheduling_simulator.expiremnt.runners.train_runner import ExperimentRunner
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -27,7 +25,7 @@ config: 'ClusterGenerationConfig' = {
 #  and run all combination of the item and make sure they are the same
 runner = ExperimentRunner(
     config,
-    train_steps=500_000,
+    train_steps=150_000,
     evalution_steps=100,
     policy_kwargs=dict(),
     max_time=300,
