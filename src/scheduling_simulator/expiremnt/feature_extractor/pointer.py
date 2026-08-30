@@ -95,6 +95,7 @@ class PointerFeaturesExtractor(BaseFeaturesExtractor):
 
         job_mean = attended.mean(dim=1)
         job_max = attended.max(dim=1).values
+        # why this doesn't get the machine as well and take into acount
         skip_emb = self.skip_encoder(th.cat([job_mean, job_max, current_time], dim=-1))
 
         action_emb = th.cat(

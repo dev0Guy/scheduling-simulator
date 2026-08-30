@@ -37,6 +37,6 @@ def generate_scheduling_env(
             envs,
             path,
             record_video_trigger=lambda x: x == 0,
-            video_length=500,
+            video_length=max_time,
         )
     return envs

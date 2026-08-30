@@ -183,9 +183,16 @@ cdef class Renderer:
             pygame.draw.rect(self.screen, color , rect)
             self.draw_table(obs.jobs_usage[job], x, y, n_resources, n_time, f"Job {job}:", obs.status[job] == JobStatus.PENDING)
 
+            # completion_time here means "wait_time + remaining ttl" — total
+            # time this job will have spent from arrival to finishing, given
+            # what's known right now. Matches the same definition used in
+            # CustomMetricsCallback's completion_time metric.
+            completion_time = obs.wait_time[job] + obs.size[job]
+
             meta_text = self.small_font.render(
                 f"S:{obs.status[job]} TTL:{obs.ttl[job]} "
-                f"A:{obs.arrival_time[job]} Size:{obs.size[job]}",
+                f"A:{obs.arrival_time[job]} Size:{obs.size[job]} "
+                f"Wait:{obs.wait_time[job]} Compl:{completion_time}",
                 True,
                 self._status_color(obs.status[job])
             )

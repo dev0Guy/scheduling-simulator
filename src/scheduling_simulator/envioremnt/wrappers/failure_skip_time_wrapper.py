@@ -23,7 +23,7 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
 
     @staticmethod
     def _mask_non_pending_usage(observation: 'ObservationDict') -> 'ObservationDict':
-        observation['jobs_usage'][np.where(observation['status'] != JobStatus.PENDING)] = 256
+        # observation['jobs_usage'][np.where(observation['status'] != JobStatus.PENDING)] = 256
         return observation
 
     @staticmethod
@@ -34,10 +34,30 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
             if status in (JobStatus.PENDING, JobStatus.RUNNING)
         )
 
+    @staticmethod
+    def _stupid_reward(observation: 'ObservationDict') -> float:
+        return sum(
+            -1.0
+            for _, status in enumerate(observation['status'])
+            if status in (JobStatus.PENDING, JobStatus.RUNNING)
+        )
+
+    @staticmethod
+    def _completion_time_reward(observation: 'ObservationDict') -> float:
+        active_mask = (
+            (observation['status'] == JobStatus.PENDING) |
+            (observation['status'] == JobStatus.RUNNING)
+        )
+        if not np.any(active_mask):
+            return 0.0  # nothing active this step — no penalty to assign
+        wait_time = observation['wait_time'][active_mask]
+        ttl = observation['ttl'][active_mask]
+        return -float(np.mean(wait_time + ttl))
+
     def _terminal_override(self, observation: 'ObservationDict') -> tuple[bool, float] | None:
         """Returns (done, reward) if a wrapper-level terminal condition
         is hit this step, else None (caller should use its own reward)."""
-        if np.all(observation['status'] == JobStatus.COMPLETED):
+        if np.all(observation['status'] == JobStatus.COMPLETED) and len(observation['status']) > 0:
             return True, 100.0
         if self._time_counter >= self._max_time:
             return True, -100.0
@@ -57,7 +77,7 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
             return observation, reward, done, False, info
 
         if skip_time:
-            return observation, self._skip_time_reward(observation), terminated, False, info
+            return observation, self._stupid_reward(observation), terminated, False, info
 
         if has_allocation_failed:
             # Allocation attempt failed: burn one tick of simulated time
@@ -73,9 +93,10 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
                 done, reward = override
                 return observation, reward, done, False, info
 
-            return observation, 1.2 * self._skip_time_reward(observation), terminated, False, info
+            invalid_action_penalty = -10
+            return observation, invalid_action_penalty + self._stupid_reward(observation), terminated, False, info
 
-        return observation, 0.0, terminated, False, info
+        return observation, 1.0, terminated, False, info
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple['ObservationDict', dict[str, Any]]:
         observation, extra = self.env.reset(seed=seed, options=options)
