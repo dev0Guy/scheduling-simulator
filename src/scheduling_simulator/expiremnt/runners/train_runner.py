@@ -15,6 +15,7 @@ import gymnasium as gym
 import glob
 
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
+from scheduling_simulator.expiremnt.policy.new_sched import NewSchedulingPolicy
 from scheduling_simulator.expiremnt.runners.env_factory import generate_scheduling_env
 from scheduling_simulator.expiremnt.callbacks.entconf_callback import EntCoefScheduler
 from scheduling_simulator.expiremnt.callbacks.scheduler_callbacks import CustomMetricsCallback
@@ -23,7 +24,7 @@ from scheduling_simulator.expiremnt.policy.schedule import SchedulingPolicy
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.cluster import ObservationDict
     from scheduling_simulator.core.creator import ClusterGenerationConfig
-
+    from stable_baselines3.common.base_class import BaseAlgorithm
 
 def _unbatch(obs: dict) -> dict:
     """Strip the leading vec-env batch dimension."""
@@ -70,6 +71,10 @@ class ExperimentRunner:
                 monitor_gym=True,
                 save_code=True,
             )
+            wandb.define_metric("evaluation/episode")
+            wandb.define_metric("eval/*", step_metric="evaluation/episode")
+            wandb.define_metric("video/evaluation", step_metric="evaluation/episode")
+
         self.train_steps = train_steps
         self.evalution_steps = evalution_steps
         self.policy_kwargs = policy_kwargs
@@ -89,15 +94,18 @@ class ExperimentRunner:
 
     def _train(self, env) -> BaseAlgorithm:
         model = PPO(
-            SchedulingPolicy,
+            # "MultiInputPolicy",
+            NewSchedulingPolicy,
             env,
-            learning_rate=3e-4,
-            n_steps=512,
+            learning_rate=1e-5,
+            n_steps=2048,
             batch_size=64,
+            n_epochs=5,
             gamma=0.99,
             gae_lambda=0.95,
-            ent_coef=0.005,
-            n_epochs=6,
+            clip_range=0.2,
+            ent_coef=0.01,
+            vf_coef=0.5,
             max_grad_norm=0.5,
             verbose=1,
             tensorboard_log=f"runs/{self.run_id}",
@@ -130,7 +138,7 @@ class ExperimentRunner:
         eval_env.close()
         return model
 
-    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 5) -> None:
+    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 1) -> None:
         print("Evaluation")
         n_jobs = self.config['n_jobs']
 
@@ -146,11 +154,12 @@ class ExperimentRunner:
             obs: 'ObservationDict'
             total_reward, steps, done = 0.0, 0, False
             allocations = 0
+            failed_allocations = 0
             final_obs = None
 
             while not done:
                 steps += 1
-                action, _states = model.predict(obs, deterministic=True)
+                action, _states = model.predict(obs, deterministic=False)
                 obs, reward, done_arr, infos = envs.step(action)
                 done = bool(done_arr[0])
                 total_reward += float(reward[0])
@@ -159,11 +168,14 @@ class ExperimentRunner:
                 # step is already the NEXT episode's reset observation.
                 # The true final observation lives in infos[0]['terminal_observation'].
                 if done:
-                    final_obs = _unbatch(infos[0].get('terminal_observation', obs))
+                    final_obs = infos[0].get('terminal_observation', obs)
                 else:
                     final_obs = _unbatch(obs)
 
-                allocations += int(action[0] != 0 and final_obs['action_success'])
+                attempted_allocation = action[0] != 0
+                succeeded = bool(final_obs['action_success'])
+                allocations += int(attempted_allocation and succeeded)
+                failed_allocations += int(attempted_allocation and not succeeded)
 
             # Sanity check: each of the n_jobs jobs can only be
             # successfully allocated once per episode (job status moves
@@ -179,32 +191,40 @@ class ExperimentRunner:
                     ep, allocations, n_jobs,
                 )
 
+            envs.close()
+
             completed_count = np.sum(final_obs['status'] == JobStatus.COMPLETED)
             running_count = np.sum(final_obs['status'] == JobStatus.RUNNING)
             pending_count = np.sum(final_obs['status'] == JobStatus.PENDING)
             not_created_count = np.sum(final_obs['status'] == JobStatus.NOT_CREATED)
-
             information = {
                 "evaluation/episode": ep,
                 "eval/length": steps,
                 "eval/avg_wait_time": np.mean(final_obs['wait_time']),
                 "eval/max_wait_time": np.max(final_obs['wait_time']),
+                "eval/max_completion_time": (final_obs['wait_time'] + final_obs['size']).max(),
+                "eval/avg_completion_time": (final_obs['wait_time'] + final_obs['size']).mean(),
+                "eval/status-completed": completed_count,
+                "eval/status-running": running_count,
+                "eval/status-pending": pending_count,
                 "eval/allocations": allocations,
+                "eval/failed_allocations": failed_allocations,
                 "eval/time": float(np.asarray(final_obs['time']).squeeze()),
                 "eval/scheduled": completed_count + running_count,
                 "eval/pending": pending_count,
                 "eval/not_created": not_created_count,
                 "eval/reward": total_reward,
-                "eval/avg_completion_time": (final_obs['wait_time'] + final_obs['ttl']).mean(),
             }
-            envs.close()
             if self.run_with_wandb:
-                wandb.log(information)
                 if record_this_ep:
                     for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
-                        wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
+                        information["video/evaluation"] = wandb.Video(f, fps=30, format="mp4")
+                wandb.log(information)
             else:
                 print(information)
+
+
+
 
     def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4):
         return generate_scheduling_env(

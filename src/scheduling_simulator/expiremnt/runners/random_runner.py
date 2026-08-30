@@ -7,6 +7,7 @@ import wandb
 from scheduling_simulator.core.job import JobStatus
 from scheduling_simulator.expiremnt.runners.env_factory import generate_scheduling_env
 from scheduling_simulator.scheduler.random_scheduler import RandomScheduler
+from scheduling_simulator.scheduler.sjf_scheduler import ShortestJobScheduler
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.cluster import ObservationDict
@@ -41,11 +42,16 @@ class RandomBaselineRunner:
                 monitor_gym=True,
                 save_code=True,
             )
+            wandb.define_metric("evaluation/episode")
+            wandb.define_metric("eval/*", step_metric="evaluation/episode")
+            wandb.define_metric("video/evaluation", step_metric="evaluation/episode")
+
         self.evalution_steps = evalution_steps
         self.max_time = max_time
         self.seed = seed
         self.run_id = "defualt" if not self.run_with_wandb else self._run.id
         self.scheduler = RandomScheduler(rng=np.random.default_rng(seed))
+        # self.scheduler = ShortestJobScheduler()
 
     def run(self) -> None:
         env = self.generate_enviroemnt(f"videos/evaluation/{self.run_id}", with_video=False)
@@ -72,7 +78,7 @@ class RandomBaselineRunner:
         n_jobs = self.config['n_jobs']
         return 1 + machine_idx * n_jobs + job_idx
 
-    def _evaluate(self, *, n_episodes: int, video_every: int = 5) -> None:
+    def _evaluate(self, *, n_episodes: int, video_every: int = 1) -> None:
         for ep in range(n_episodes):
             record_this_ep = (ep % video_every == 0)
             envs = self.generate_enviroemnt(
@@ -84,6 +90,7 @@ class RandomBaselineRunner:
             obs: 'ObservationDict'
             total_reward, steps, done = 0.0, 0, False
             allocations = 0
+            failed_allocations = 0
             final_obs = None
 
             while not done:
@@ -99,11 +106,15 @@ class RandomBaselineRunner:
                 # step is already the NEXT episode's reset observation.
                 # The true final observation lives in infos[0]['terminal_observation'].
                 if done:
-                    final_obs = _unbatch(infos[0].get('terminal_observation', obs))
+                    final_obs = infos[0].get('terminal_observation', obs)
+
                 else:
                     final_obs = _unbatch(obs)
 
-                allocations += int(not skip and final_obs['action_success'])
+                attempted_allocation = not skip
+                succeeded = bool(final_obs['action_success'])
+                allocations += int(attempted_allocation and succeeded)
+                failed_allocations += int(attempted_allocation and not succeeded)
 
             completed_count = np.sum(final_obs['status'] == JobStatus.COMPLETED)
             running_count = np.sum(final_obs['status'] == JobStatus.RUNNING)
@@ -115,23 +126,32 @@ class RandomBaselineRunner:
                 "eval/length": steps,
                 "eval/avg_wait_time": np.mean(final_obs['wait_time']),
                 "eval/max_wait_time": np.max(final_obs['wait_time']),
+                "eval/avg_completion_time": (final_obs['wait_time'] + final_obs['size']).mean(),
+                "eval/max_completion_time": (final_obs['wait_time'] + final_obs['size']).max(),
                 "eval/allocations": allocations,
+                "eval/failed_allocations": failed_allocations,
                 "eval/time": float(np.asarray(final_obs['time']).squeeze()),
+                "eval/status-completed": completed_count,
+                "eval/status-running": running_count,
+                "eval/status-pending": pending_count,
                 "eval/scheduled": completed_count + running_count,
-                "eval/pending": pending_count,
                 "eval/not_created": not_created_count,
+                "eval/pending": pending_count,
                 "eval/reward": total_reward,
-                "eval/avg_completion_time": (final_obs['wait_time'] + final_obs['ttl']).mean(),
             }
+            envs.close()
+
+            # if record_this_ep and self.run_with_wandb:
+            #     for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
+            #         wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
             if self.run_with_wandb:
+                if record_this_ep:
+                    for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
+                        information["video/evaluation"] = wandb.Video(f, fps=30, format="mp4")
                 wandb.log(information)
             else:
                 print(information)
 
-            envs.close()
-            if record_this_ep and self.run_with_wandb:
-                for f in glob.glob(f"videos/evaluation/{self.run_id}/ep_{ep}/*.mp4"):
-                    wandb.log({"video/evaluation": wandb.Video(f, fps=30, format="mp4")})
 
     def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 1):
         return generate_scheduling_env(

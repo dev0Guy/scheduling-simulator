@@ -204,4 +204,5 @@ Key PPO hyperparameters as currently set and why:
 - More compute per forward pass than a comparably-sized flat MLP (attention is quadratic in sequence length, though at `n_jobs=10` this is cheap).
 - The architecture is not validity-aware by construction — it buys sample efficiency and generalization, not "never proposes an invalid action." That's an orthogonal concern currently handled (partially) by the reward function and the `FailureSkipTimeWrapper`, not by the network itself.
 
-**The honest baseline check worth running:** train a plain `MultiInputPolicy` + `PPO` on the same fixed config for the same step budget, and compare `eval/avg_completion_time`. If the pointer architecture isn't clearly ahead, the added complexity here isn't paying for itself yet on this problem size (`n_jobs=10, n_machines=1` is small enough that a flat MLP's parameter inefficiency may not matter much in practice).
+**The honest baseline check worth running:** train a plain `MultiInputPolicy` + `PPO` on the same fixed config for the same step budget, and compare `
+`. If the pointer architecture isn't clearly ahead, the added complexity here isn't paying for itself yet on this problem size (`n_jobs=10, n_machines=1` is small enough that a flat MLP's parameter inefficiency may not matter much in practice).
