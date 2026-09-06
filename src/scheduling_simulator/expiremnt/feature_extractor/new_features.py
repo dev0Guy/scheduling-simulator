@@ -39,8 +39,8 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
         self,
         observation_space: gym.spaces.Dict,
         status_embed_dim: int = 16,
-        embedding_dim: int = 128,
-        attention_hidden_dim: int = 32,
+        embedding_dim: int = 256,
+        attention_hidden_dim: int = 64,
         max_time: float = 250.0,
     ):
         self.n_jobs = int(

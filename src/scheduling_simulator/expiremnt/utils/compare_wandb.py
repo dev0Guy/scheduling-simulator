@@ -3,8 +3,8 @@ import wandb
 
 PROJECT = "dev0guy/cluster-scheduling-simulator"
 
-RUN_A = "u62q09kb"  # PPO
-RUN_B = "tejwpkmb"  # Random
+RUN_A = "33xw8fke"  # PPO
+RUN_B = "3lm3wkgs"  # Random
 
 
 METRICS = {

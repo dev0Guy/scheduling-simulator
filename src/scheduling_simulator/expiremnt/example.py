@@ -20,14 +20,15 @@ config: "ClusterGenerationConfig" = {
 
 runner = ExperimentRunner(
     config,
-    train_steps=750_000,
+    train_steps=2_000_000,
     evalution_steps=100,
     policy_kwargs={
-        "embedding_dim": 128,
+        "embedding_dim": 256,
         "n_machines": config["n_machines"],
-        "max_time": 100.0,
+        "max_time": 110.0,
+        # "attention_hidden_dim":64
     },
-    max_time=100,
+    max_time=110,
     run_with_wandb=True,
     eval_every_steps=50_000,
 )
