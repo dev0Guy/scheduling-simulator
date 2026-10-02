@@ -97,14 +97,20 @@ class ExperimentRunner:
             # "MultiInputPolicy",
             NewSchedulingPolicy,
             env,
-            learning_rate=1e-5,
+            learning_rate=7e-6,
             n_steps=2048,
             batch_size=64,
             n_epochs=5,
-            gamma=0.99,
-            gae_lambda=0.95,
+            # gamma=0.999/gae_lambda=0.99 was tried and measured as a
+            # mild regression (run r23681yd, see docs/experiment_log.md)
+            # vs 0.995/0.995. gamma=1.0 (undiscounted) was tried next, on
+            # top of the no-arrival ablation, and was a much larger
+            # regression (run r84hnw8u, see docs/experiment_log.md #17).
+            # Reverted back to the validated-best 0.995/0.995 here.
+            gamma=0.995,
+            gae_lambda=0.995,
             clip_range=0.2,
-            ent_coef=0.01,
+            ent_coef=0.03,
             vf_coef=0.5,
             max_grad_norm=0.5,
             verbose=1,
@@ -159,7 +165,7 @@ class ExperimentRunner:
 
             while not done:
                 steps += 1
-                action, _states = model.predict(obs, deterministic=False)
+                action, _states = model.predict(obs, deterministic=True)
                 obs, reward, done_arr, infos = envs.step(action)
                 done = bool(done_arr[0])
                 total_reward += float(reward[0])

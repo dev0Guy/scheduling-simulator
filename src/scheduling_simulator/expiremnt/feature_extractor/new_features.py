@@ -14,19 +14,27 @@ if TYPE_CHECKING:
 
 class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
     """
-    Feature extractor for scheduling.
+    Reconstructed to be exactly the `np7aenua` ("silver-butterfly-298")
+    baseline architecture -- see docs/ppo_vs_sjf_results.md's "Baseline"
+    row and docs/experiment_log.md entry #3. This predates queue_pressure
+    (entry #5-6), job self-attention (entry #7-8), and everything from
+    the dual-attention / bin-packing eras: base per-job features only,
+    pure pooling attention, no cross-job comparison mechanism at all.
 
     Per-job features:
         - status
         - size
         - wait_time
         - ttl
+        - arrival (time until arrival, see experiment log #3 -- the
+          first genuine win recorded in this project, +1.03% margin
+          over the pre-arrival baseline)
 
-    Each job is independently embedded.
-
-    We keep:
-        1. A global job representation produced by attention pooling.
-        2. The individual embedding of every job.
+    Each job is independently embedded -- no self-attention, no
+    cross-job interaction of any kind. The only place information from
+    other jobs reaches a given job's decision is through the pooled
+    global_embedding (a single shared vector, attention-weighted over
+    all jobs).
 
     Output:
         [global_embedding, job_0_embedding, ..., job_N_embedding]
@@ -39,8 +47,8 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
         self,
         observation_space: gym.spaces.Dict,
         status_embed_dim: int = 16,
-        embedding_dim: int = 128,
-        attention_hidden_dim: int = 32,
+        embedding_dim: int = 256,
+        attention_hidden_dim: int = 64,
         max_time: float = 250.0,
     ):
         self.n_jobs = int(
@@ -71,9 +79,9 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
             status_embed_dim,
         )
 
-        # status embedding + size + wait_time + ttl
+        # status embedding + size + wait_time + ttl + arrival
         self.job_input_dim = (
-            status_embed_dim + 3
+            status_embed_dim + 4
         )
 
         # ---------------------------------------------------------
@@ -153,6 +161,12 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
             1.0,
         )
 
+        arrival = torch.clamp(
+            (observations["arrival"] - observations["time"]) / self.max_time,
+            0.0,
+            1.0,
+        )
+
         batch_size = status.shape[0]
 
         # ---------------------------------------------------------
@@ -172,7 +186,7 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
         # ---------------------------------------------------------
         # Build per-job representation
         #
-        # [status_embedding, size, wait_time, ttl]
+        # [status_embedding, size, wait_time, ttl, arrival]
         # ---------------------------------------------------------
 
         job_features = torch.cat(
@@ -181,6 +195,7 @@ class StatusSizeWaitTtlCapacityFeaturesExtractor(BaseFeaturesExtractor):
                 size.unsqueeze(-1),
                 wait_time.unsqueeze(-1),
                 ttl.unsqueeze(-1),
+                arrival.unsqueeze(-1),
             ],
             dim=-1,
         )

@@ -50,8 +50,8 @@ class RandomBaselineRunner:
         self.max_time = max_time
         self.seed = seed
         self.run_id = "defualt" if not self.run_with_wandb else self._run.id
-        self.scheduler = RandomScheduler(rng=np.random.default_rng(seed))
-        # self.scheduler = ShortestJobScheduler()
+        # self.scheduler = RandomScheduler(rng=np.random.default_rng(seed))
+        self.scheduler = ShortestJobScheduler()
 
     def run(self) -> None:
         env = self.generate_enviroemnt(f"videos/evaluation/{self.run_id}", with_video=False)

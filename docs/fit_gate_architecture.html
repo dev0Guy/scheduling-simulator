@@ -1,0 +1,559 @@
+<title>Fit Gate Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Layout: single-column article, one wide diagram card, two supporting
+     detail cards below it (the gate MLP; the numeric result trend) */
+  :root {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --surface-2: #efeee8;
+    --border: #ddd9d0;
+    --text: #1b1e23;
+    --text-dim: #656b74;
+    --text-faint: #9a9d9f;
+    --job: #b06e0d;
+    --job-dim: #f2e2c4;
+    --machine: #1c7999;
+    --machine-dim: #d3eaf1;
+    --cross: #7c4cc4;
+    --cross-dim: #ecdffb;
+    --raw: #1a7a52;
+    --raw-dim: #d7f0e4;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a;
+      --surface: #191d24;
+      --surface-2: #1f242c;
+      --border: #2a3038;
+      --text: #e6e9ec;
+      --text-dim: #8b929c;
+      --text-faint: #565c66;
+      --job: #f2a93c;
+      --job-dim: #6b5228;
+      --machine: #5fb3d9;
+      --machine-dim: #2b4a58;
+      --cross: #c79bf5;
+      --cross-dim: #4a3a63;
+      --raw: #4fd39a;
+      --raw-dim: #1d3f31;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #12151a;
+    --surface: #191d24;
+    --surface-2: #1f242c;
+    --border: #2a3038;
+    --text: #e6e9ec;
+    --text-dim: #8b929c;
+    --text-faint: #565c66;
+    --job: #f2a93c;
+    --job-dim: #6b5228;
+    --machine: #5fb3d9;
+    --machine-dim: #2b4a58;
+    --cross: #c79bf5;
+    --cross-dim: #4a3a63;
+    --raw: #4fd39a;
+    --raw-dim: #1d3f31;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    padding: 48px 20px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--raw);
+  }
+
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 34px;
+    font-weight: 600;
+    font-optical-sizing: auto;
+    margin: 10px 0 0;
+    line-height: 1.18;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+
+  p {
+    font-size: 15px;
+    line-height: 1.66;
+    color: var(--text-dim);
+    max-width: 68ch;
+    margin: 0 0 12px;
+  }
+  p:last-child { margin-bottom: 0; }
+
+  b { color: var(--text); font-weight: 600; }
+  code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  section { display: flex; flex-direction: column; }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 18px 16px;
+  }
+
+  .diagram-scroll { overflow-x: auto; padding-bottom: 4px; }
+
+  figure { margin: 0; }
+  svg.diagram { display: block; height: auto; }
+  svg.diagram.wide { width: 960px; max-width: none; }
+  svg.diagram.small { width: 560px; max-width: none; }
+
+  figcaption {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-top: 12px;
+    line-height: 1.55;
+    max-width: 74ch;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  .swatch { width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .swatch.job-sw { background: var(--job); }
+  .swatch.machine-sw { background: var(--machine); }
+  .swatch.cross-sw { background: var(--cross); }
+  .swatch.raw-sw { background: var(--raw); }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 8px 12px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  tbody tr:last-child td { color: var(--text); font-weight: 600; border-bottom: none; }
+
+  .note {
+    background: var(--raw-dim);
+    border: 1px solid var(--raw);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .note .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--raw);
+    font-weight: 600;
+  }
+  .note p { color: var(--text); max-width: none; }
+
+  footer {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    text-align: center;
+    padding-top: 8px;
+  }
+</style>
+
+<div class="page">
+
+  <div>
+    <div class="eyebrow">Cluster Scheduling Simulator &middot; Architecture &middot; Not adopted</div>
+    <h1>The fit gate: separating sequencing from packing</h1>
+    <p style="margin-top: 10px;">
+      A tried architecture for the concurrent-packing task (jobs claim a random fraction of a
+      machine's capacity instead of always claiming all of it, so multiple jobs can run on one
+      machine at once). Job/machine attention reasons only about identity and timing; a second,
+      structurally separate path reasons about capacity fit, and a learned gate decides how much
+      the second path should move the final score. <b>Result: a clear regression</b> &mdash; see
+      "Progression against SJF" below. The current best on this task remains the simpler design
+      one step before this one (direct concatenation, no gate).
+    </p>
+  </div>
+
+  <section>
+    <h2>Two paths that never mix until the very last step</h2>
+    <p>
+      Everything in the <span style="color:var(--job)">amber/blue attention path</span> is
+      <b>capacity-blind</b> &mdash; it never sees <code>usage</code> or free capacity, only job
+      identity (<code>status, size, wait_time, ttl</code>) and machine load history. Separately,
+      the feature extractor emits <span style="color:var(--raw)">raw, unembedded</span>
+      <code>usage</code> and <code>free_capacity_now</code> straight through, with no MLP or
+      attention touching them. The two paths meet only at the very end, at the actor's scorer.
+    </p>
+
+    <div class="diagram-card">
+      <figure>
+        <div class="diagram-scroll">
+        <svg class="diagram wide" viewBox="0 0 980 900" role="img" aria-label="Diagram showing two parallel paths: a capacity-blind job and machine attention path producing clean embeddings, and a raw usage and free-capacity path bypassing all embeddings, which meet only at the actor's scorer where a learned gate, computed from the clean embeddings, decides how much the raw fit signal should move the final score.">
+
+          <defs>
+            <marker id="arrowJob" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--job)" />
+            </marker>
+            <marker id="arrowMachine" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--machine)" />
+            </marker>
+            <marker id="arrowRaw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--raw)" />
+            </marker>
+            <marker id="arrowNeutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+            </marker>
+          </defs>
+
+          <text x="225" y="26" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--job)" letter-spacing="0.04em">JOB PATH (capacity-blind)</text>
+          <text x="620" y="26" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--machine)" letter-spacing="0.04em">MACHINE PATH (capacity-blind)</text>
+          <text x="900" y="26" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--raw)" letter-spacing="0.03em">RAW PATH</text>
+
+          <!-- job input -->
+          <rect x="70" y="42" width="310" height="46" rx="8" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="61" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">status, size, wait_time, ttl,</text>
+          <text x="225" y="77" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">queue_pressure &times; 10 jobs</text>
+
+          <!-- machine input -->
+          <rect x="465" y="42" width="310" height="46" rx="8" fill="var(--surface-2)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="620" y="61" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">utilization_now,</text>
+          <text x="620" y="77" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">utilization_window &times; n_machines</text>
+
+          <!-- raw input -->
+          <rect x="820" y="42" width="140" height="46" rx="8" fill="var(--surface-2)" stroke="var(--raw)" stroke-width="1.5" />
+          <text x="890" y="61" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">jobs_usage,</text>
+          <text x="890" y="77" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">machines_usage</text>
+
+          <line x1="225" y1="88" x2="225" y2="116" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="620" y1="88" x2="620" y2="116" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <!-- job encoder -->
+          <rect x="120" y="118" width="210" height="40" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="139" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">job encoder (MLP), 20&rarr;256</text>
+
+          <!-- machine encoder -->
+          <rect x="515" y="118" width="210" height="40" rx="8" fill="var(--surface)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="620" y="139" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">machine encoder (MLP), 2&rarr;256</text>
+
+          <line x1="225" y1="158" x2="225" y2="186" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="620" y1="158" x2="620" y2="186" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <!-- self attention -->
+          <rect x="105" y="188" width="240" height="44" rx="8" fill="var(--job-dim)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="207" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">job self-attention (h=4)</text>
+          <text x="225" y="222" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">COMPLETED masked as keys</text>
+
+          <rect x="500" y="188" width="240" height="44" rx="8" fill="var(--machine-dim)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="620" y="207" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">machine self-attention (h=4)</text>
+          <text x="620" y="222" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">no-op at n_machines=1</text>
+
+          <line x1="225" y1="232" x2="225" y2="260" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="620" y1="232" x2="620" y2="260" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <!-- dual cross attention -->
+          <rect x="85" y="262" width="670" height="78" rx="10" fill="var(--cross-dim)" stroke="var(--cross)" stroke-width="1.8" />
+          <text x="420" y="282" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--cross)" letter-spacing="0.03em">DUAL CROSS-ATTENTION &mdash; GATED (LayerScale)</text>
+          <text x="420" y="300" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">job&rarr;machine and machine&rarr;job, each: embeddings + GATE&times;cross_attn</text>
+          <text x="420" y="317" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">GATE = learnable per-channel scale, init 0 (still capacity-blind)</text>
+
+          <line x1="225" y1="234" x2="270" y2="262" stroke="var(--job)" stroke-width="1.2" />
+          <line x1="620" y1="234" x2="580" y2="262" stroke="var(--machine)" stroke-width="1.2" />
+
+          <line x1="270" y1="340" x2="225" y2="368" stroke="var(--cross)" stroke-width="1.5" marker-end="url(#arrowCross)" />
+          <line x1="580" y1="340" x2="620" y2="368" stroke="var(--cross)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="105" y="370" width="240" height="38" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="393" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">contextualized job embeddings</text>
+
+          <rect x="500" y="370" width="240" height="38" rx="8" fill="var(--surface)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="620" y="393" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">contextualized machine embeddings</text>
+
+          <text x="225" y="418" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-faint)">(10 &times; 256, still no capacity info)</text>
+          <text x="620" y="418" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-faint)">(n_machines &times; 256, still no capacity info)</text>
+
+          <!-- raw path straight down, untouched -->
+          <line x1="890" y1="88" x2="890" y2="460" stroke="var(--raw)" stroke-width="1.5" stroke-dasharray="5,4" />
+          <text x="905" y="270" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--raw)" transform="rotate(90 905 270)" text-anchor="middle">no encoder, no attention &mdash; passes through unchanged</text>
+
+          <rect x="820" y="426" width="140" height="60" rx="8" fill="var(--raw-dim)" stroke="var(--raw)" stroke-width="1.5" />
+          <text x="890" y="448" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">usage[j] (raw)</text>
+          <text x="890" y="465" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">free_capacity_now[m]</text>
+          <text x="890" y="480" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--text-dim)">unembedded, normalized only</text>
+
+          <!-- pooling (job/machine) -->
+          <line x1="225" y1="408" x2="225" y2="436" stroke="var(--job)" stroke-width="1.5" />
+          <line x1="620" y1="408" x2="620" y2="436" stroke="var(--machine)" stroke-width="1.5" />
+
+          <rect x="150" y="438" width="150" height="34" rx="7" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.2" />
+          <text x="225" y="459" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">attention pooling</text>
+
+          <rect x="545" y="438" width="150" height="34" rx="7" fill="var(--surface-2)" stroke="var(--machine)" stroke-width="1.2" />
+          <text x="620" y="459" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">mean pooling</text>
+
+          <line x1="225" y1="472" x2="225" y2="500" stroke="var(--job)" stroke-width="1.5" />
+          <line x1="620" y1="472" x2="620" y2="500" stroke="var(--machine)" stroke-width="1.5" />
+          <line x1="225" y1="500" x2="420" y2="528" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="620" y1="500" x2="420" y2="528" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="240" y="530" width="360" height="42" rx="8" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.3" />
+          <text x="420" y="550" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">concat[jobs, machines, queue_pressure]</text>
+          <text x="420" y="566" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--text-dim)">&rarr; global_head MLP &rarr; global embedding (256)</text>
+
+          <line x1="420" y1="572" x2="420" y2="600" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowNeutral)" />
+
+          <!-- fan out to actor pair scoring -->
+          <line x1="225" y1="408" x2="225" y2="620" stroke="var(--job)" stroke-width="1.3" stroke-dasharray="3,3" />
+          <line x1="620" y1="408" x2="620" y2="620" stroke="var(--machine)" stroke-width="1.3" stroke-dasharray="3,3" />
+          <text x="255" y="600" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-faint)">job embedding (per pair)</text>
+          <text x="650" y="600" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-faint)">machine embedding (per pair)</text>
+
+          <line x1="420" y1="600" x2="420" y2="620" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3,3" />
+          <text x="440" y="612" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-faint)">global</text>
+
+          <!-- ACTOR PAIR SCORER -->
+          <rect x="80" y="624" width="700" height="196" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.6" />
+          <text x="430" y="648" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--text)">ACTOR: per-(machine, job) pair scorer</text>
+
+          <!-- left column: two nets sharing the same clean [global,machine,job] input -->
+          <rect x="105" y="666" width="220" height="40" rx="7" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.2" />
+          <text x="215" y="684" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">score_net(embeddings)</text>
+          <text x="215" y="698" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-dim)">&rarr; embedding_score</text>
+
+          <rect x="105" y="722" width="220" height="46" rx="7" fill="var(--raw-dim)" stroke="var(--raw)" stroke-width="1.4" />
+          <text x="215" y="741" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">fit_gate_net(embeddings)</text>
+          <text x="215" y="756" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-dim)">&rarr; gate = &sigma;(&middot;) &isin; [0,1]</text>
+
+          <!-- raw fit arrives here, routed over from the raw-values box above -->
+          <rect x="380" y="666" width="150" height="34" rx="7" fill="var(--raw-dim)" stroke="var(--raw)" stroke-width="1.3" />
+          <text x="455" y="687" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">fit[m,j] (raw)</text>
+          <text x="455" y="711" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--raw)">= free_capacity_now[m] &minus; usage[j]</text>
+          <path d="M 890 486 L 890 610 L 455 610 L 455 666" fill="none" stroke="var(--raw)" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrowRaw)" />
+
+          <!-- combine gate x fit -->
+          <rect x="380" y="722" width="150" height="34" rx="7" fill="var(--raw-dim)" stroke="var(--raw)" stroke-width="1.3" />
+          <text x="455" y="743" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">gate &times; fit</text>
+
+          <line x1="325" y1="745" x2="380" y2="739" stroke="var(--raw)" stroke-width="1.3" marker-end="url(#arrowRaw)" />
+          <line x1="455" y1="700" x2="455" y2="722" stroke="var(--raw)" stroke-width="1.3" marker-end="url(#arrowRaw)" />
+
+          <!-- fit_scale, then sum with embedding_score -->
+          <line x1="455" y1="756" x2="455" y2="780" stroke="var(--raw)" stroke-width="1.3" />
+          <text x="500" y="772" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-dim)">&times; fit_scale (init 0)</text>
+          <line x1="455" y1="780" x2="580" y2="780" stroke="var(--raw)" stroke-width="1.3" marker-end="url(#arrowRaw)" />
+
+          <line x1="325" y1="686" x2="580" y2="770" stroke="currentColor" stroke-width="1.3" marker-end="url(#arrowNeutral)" />
+
+          <rect x="590" y="758" width="60" height="34" rx="17" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.2" />
+          <text x="620" y="779" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--text)">+</text>
+
+          <line x1="650" y1="775" x2="700" y2="775" stroke="currentColor" stroke-width="1.3" marker-end="url(#arrowNeutral)" />
+          <rect x="655" y="760" width="0" height="0" />
+
+          <text x="430" y="802" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">pair_score = score_net(embeddings) + fit_scale &middot; gate(embeddings) &middot; fit</text>
+
+          <line x1="430" y1="806" x2="430" y2="828" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowNeutral)" />
+
+          <rect x="340" y="830" width="180" height="34" rx="7" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.3" />
+          <text x="430" y="851" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">softmax &rarr; action</text>
+
+        </svg>
+        </div>
+      </figure>
+      <figcaption>
+        Job and machine embeddings (amber/blue) never see capacity information &mdash; they reach
+        the scorer having reasoned only about identity, timing, and load history. The raw path
+        (green, dashed) carries <code>usage</code> and <code>free_capacity_now</code> straight from
+        the observation to the scorer, untouched by any encoder or attention layer. The two meet
+        only inside the actor's per-pair scorer, where a small gate network (same clean-embedding
+        input as <code>score_net</code>) decides how much the raw fit arithmetic should move the
+        final score &mdash; scaled by a learnable parameter initialized to zero, so training starts
+        exactly equivalent to ignoring capacity information entirely.
+      </figcaption>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch job-sw"></span>job path (capacity-blind)</div>
+        <div class="legend-item"><span class="swatch machine-sw"></span>machine path (capacity-blind)</div>
+        <div class="legend-item"><span class="swatch cross-sw"></span>dual cross-attention (gated)</div>
+        <div class="legend-item"><span class="swatch raw-sw"></span>raw capacity path</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Why this design, and what it replaced</h2>
+    <div class="two-col">
+      <div class="diagram-card">
+        <h2 style="font-size:15px; margin-bottom:8px;">Before: fit baked into embeddings</h2>
+        <svg class="diagram small" viewBox="0 0 560 220" role="img" aria-label="Prior design: usage and fit_slack were concatenated into every job's input features before the job encoder, so capacity information was baked into the same embeddings self-attention reasoned over.">
+          <rect x="30" y="20" width="220" height="50" rx="7" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.4" />
+          <text x="140" y="42" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">status, size, wait_time, ttl,</text>
+          <text x="140" y="58" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--raw)">usage, fit_slack</text>
+          <line x1="140" y1="70" x2="140" y2="96" stroke="var(--job)" stroke-width="1.4" marker-end="url(#arrowJob)" />
+          <rect x="50" y="98" width="180" height="34" rx="7" fill="var(--surface)" stroke="var(--job)" stroke-width="1.3" />
+          <text x="140" y="119" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">job_encoder, 22&rarr;256</text>
+          <line x1="140" y1="132" x2="140" y2="158" stroke="var(--job)" stroke-width="1.4" marker-end="url(#arrowJob)" />
+          <rect x="30" y="160" width="220" height="40" rx="7" fill="var(--job-dim)" stroke="var(--job)" stroke-width="1.3" />
+          <text x="140" y="184" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">job self-attention</text>
+          <text x="335" y="60" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">fit reaches score_net</text>
+          <text x="335" y="74" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">only after several attention</text>
+          <text x="335" y="88" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">hops, at a fixed weight</text>
+        </svg>
+        <figcaption>Log #18-20. Worked (closed most of the gap) but always weighted capacity info the same regardless of situation.</figcaption>
+      </div>
+      <div class="diagram-card">
+        <h2 style="font-size:15px; margin-bottom:8px;">Now: fit gated by clean attention</h2>
+        <svg class="diagram small" viewBox="0 0 560 220" role="img" aria-label="Current design: usage and fit are kept out of the job encoder entirely and only reach the scorer through a separate raw path, combined via a learned gate computed from the capacity-blind embeddings.">
+          <rect x="30" y="20" width="220" height="40" rx="7" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.4" />
+          <text x="140" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">status, size, wait_time, ttl</text>
+          <line x1="140" y1="60" x2="140" y2="86" stroke="var(--job)" stroke-width="1.4" marker-end="url(#arrowJob)" />
+          <rect x="50" y="88" width="180" height="34" rx="7" fill="var(--surface)" stroke="var(--job)" stroke-width="1.3" />
+          <text x="140" y="109" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--text)">job_encoder, 20&rarr;256</text>
+          <line x1="140" y1="122" x2="140" y2="148" stroke="var(--job)" stroke-width="1.4" marker-end="url(#arrowJob)" />
+          <rect x="30" y="150" width="220" height="34" rx="7" fill="var(--job-dim)" stroke="var(--job)" stroke-width="1.3" />
+          <text x="140" y="171" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">job self-attention (clean)</text>
+          <line x1="140" y1="184" x2="140" y2="204" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2,2" />
+          <line x1="330" y1="30" x2="330" y2="204" stroke="var(--raw)" stroke-width="1.4" stroke-dasharray="4,3" />
+          <text x="345" y="120" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--raw)" transform="rotate(90 345 120)" text-anchor="middle">usage/free_capacity, untouched</text>
+          <line x1="140" y1="204" x2="290" y2="204" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2,2" />
+          <line x1="330" y1="204" x2="290" y2="204" stroke="var(--raw)" stroke-width="1.2" stroke-dasharray="2,2" />
+          <rect x="255" y="188" width="70" height="32" rx="6" fill="var(--raw-dim)" stroke="var(--raw)" stroke-width="1.3" />
+          <text x="290" y="208" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text)">gate&times;fit</text>
+        </svg>
+        <figcaption>Log #21. The gate is computed from the same clean embeddings that never saw usage, learning per-situation when the raw signal should matter.</figcaption>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Progression against SJF</h2>
+    <p>Mean reward margin vs. the SJF baseline, 5000 deterministic evaluation episodes, on the narrowed [40%,60%] utilization curriculum. Positive is a PPO win; this task has not yet reached one.</p>
+    <div class="diagram-card" style="padding: 0; overflow: hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Change</th>
+            <th>SJF win rate</th>
+            <th>PPO win rate</th>
+            <th>Mean margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>0</td><td>no capacity signal at all</td><td>97.42%</td><td>0.76%</td><td>&minus;154.14%</td></tr>
+          <tr><td>1</td><td>+ <code>usage</code> feature</td><td>85.92%</td><td>8.58%</td><td>&minus;52.43%</td></tr>
+          <tr><td>2</td><td>+ <code>fit_slack</code>, longer training, narrower curriculum</td><td>79.34%</td><td>9.84%</td><td>&minus;25.33%</td></tr>
+          <tr><td>3</td><td>+ explicit fit term, fixed weight &mdash; <b>current best</b></td><td>70.86%</td><td>13.20%</td><td>&minus;15.77%</td></tr>
+          <tr style="color: #b0433f;"><td>4</td><td>+ learned fit gate (this page) &mdash; <b>regression</b></td><td>98.08%</td><td>1.18%</td><td>&minus;89.98%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top: 12px;">
+      Step 4 is a clear regression from step 3, not an improvement &mdash; ties collapsed from
+      15.94% to 0.74%, and the mean margin moved back most of the way toward step 0's total
+      collapse. <code>explained_variance</code> still converged normally during training
+      (~0.94&ndash;0.97), so this isn't undertraining or a broken run. See the note below for the
+      likely cause.
+    </p>
+  </section>
+
+  <div class="note">
+    <div class="label">Why this didn't work</div>
+    <p>
+      Steps 1-3 all worked by concatenating capacity information into whatever the network was
+      already computing &mdash; first into the job embedding itself, then into <code>score_net</code>'s
+      input &mdash; and each time the network had to use that information at whatever weight training
+      converged on, uniformly across every situation. The hypothesis behind this design was that fully
+      separating the two paths and gating their combination would repeat the pattern that fixed an
+      earlier regression in this project: the ungated dual cross-attention (log #15) made the policy
+      <i>more decisive without being more accurate</i>, and a LayerScale-style zero-initialized gate
+      fixed it by letting training decide how much of the new signal to trust.
+    </p>
+    <p>
+      That pattern didn't transfer here. The most likely difference: log #15's gate scaled a
+      cross-attention <i>output</i> being added back into an embedding that was already receiving a
+      useful gradient from everywhere else in the network. Here, <code>score_net</code> and
+      <code>fit_gate_net</code> are two separate heads that both had to be learned from scratch,
+      sharing the same embedding input but producing two different quantities (a score and a gate)
+      that only combine multiplicatively at the very end. That's a harder credit-assignment problem
+      than one network learning <code>[embeddings, fit] &rarr; score</code> directly (step 3's design)
+      &mdash; the gate has to learn <i>when</i> to trust a signal at the same time the embeddings
+      feeding it are themselves still being learned, and 2M steps wasn't enough for that joint
+      optimization to converge to something useful. Reverted; step 3 (direct concatenation, no gate)
+      remains the current best on this task.
+    </p>
+  </div>
+
+  <footer>src/scheduling_simulator/expiremnt/feature_extractor/new_features.py &middot; src/scheduling_simulator/expiremnt/policy/new_sched.py &middot; docs/experiment_log.md #21</footer>
+
+</div>
