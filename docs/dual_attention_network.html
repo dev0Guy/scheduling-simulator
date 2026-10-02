@@ -1,0 +1,473 @@
+<title>Dual Attention Scheduler</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #12151a;
+    --surface: #191d24;
+    --surface-2: #1f242c;
+    --border: #2a3038;
+    --text: #e6e9ec;
+    --text-dim: #8b929c;
+    --text-faint: #565c66;
+    --job: #f2a93c;
+    --job-dim: #6b5228;
+    --machine: #5fb3d9;
+    --machine-dim: #2b4a58;
+    --cross: #c79bf5;
+    --cross-dim: #4a3a63;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="light"]) {
+      --bg: #f6f5f1;
+      --surface: #ffffff;
+      --surface-2: #efeee8;
+      --border: #ddd9d0;
+      --text: #1b1e23;
+      --text-dim: #656b74;
+      --text-faint: #9a9d9f;
+      --job: #b06e0d;
+      --job-dim: #f2e2c4;
+      --machine: #1c7999;
+      --machine-dim: #d3eaf1;
+      --cross: #7c4cc4;
+      --cross-dim: #ecdffb;
+    }
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --surface-2: #efeee8;
+    --border: #ddd9d0;
+    --text: #1b1e23;
+    --text-dim: #656b74;
+    --text-faint: #9a9d9f;
+    --job: #b06e0d;
+    --job-dim: #f2e2c4;
+    --machine: #1c7999;
+    --machine-dim: #d3eaf1;
+    --cross: #7c4cc4;
+    --cross-dim: #ecdffb;
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #12151a;
+    --surface: #191d24;
+    --surface-2: #1f242c;
+    --border: #2a3038;
+    --text: #e6e9ec;
+    --text-dim: #8b929c;
+    --text-faint: #565c66;
+    --job: #f2a93c;
+    --job-dim: #6b5228;
+    --machine: #5fb3d9;
+    --machine-dim: #2b4a58;
+    --cross: #c79bf5;
+    --cross-dim: #4a3a63;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    padding: 48px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--machine);
+  }
+
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 38px;
+    font-weight: 600;
+    font-optical-sizing: auto;
+    margin: 10px 0 0;
+    line-height: 1.15;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+
+  p {
+    font-size: 15.5px;
+    line-height: 1.68;
+    color: var(--text-dim);
+    max-width: 66ch;
+    margin: 0 0 14px;
+  }
+
+  p:last-child { margin-bottom: 0; }
+
+  b { color: var(--text); font-weight: 600; }
+  code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .task-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 18px;
+  }
+
+  .task-stat {
+    background: var(--surface);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .task-stat .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .task-stat .value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: break-word;
+  }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px 18px;
+  }
+
+  figure { margin: 0; }
+
+  svg { width: 100%; height: auto; display: block; }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-top: 14px;
+    line-height: 1.55;
+    max-width: 70ch;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .swatch {
+    width: 22px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .swatch.job-sw { background: var(--job); }
+  .swatch.machine-sw { background: var(--machine); }
+  .swatch.cross-sw { background: var(--cross); height: 3px; }
+
+  .note {
+    background: var(--cross-dim);
+    border: 1px solid var(--cross);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .note .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cross);
+    font-weight: 600;
+  }
+
+  .note p { color: var(--text); max-width: none; }
+
+  footer {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: center;
+    padding-top: 8px;
+  }
+  footer a { color: var(--machine); }
+</style>
+
+<div class="page">
+
+  <div>
+    <div class="eyebrow">Cluster Scheduling Simulator &middot; Architecture</div>
+    <h1>A dual attention network for job &amp; machine scheduling</h1>
+  </div>
+
+  <section>
+    <h2>The task</h2>
+    <p>
+      A cluster runs <b>n_machines</b> identical machines and receives <b>n_jobs</b> jobs over the course
+      of an episode. Each job arrives at some tick and needs <b>size</b> ticks of machine time to finish.
+      Machines are no longer exclusive: each job now claims a random fraction of a machine's capacity
+      (10&ndash;50%), so multiple jobs can run concurrently on the same machine as long as their combined
+      usage fits (bin-packing), not just one job at a time. Every tick, the scheduler either allocates one
+      pending job to a machine with room or does nothing. The objective is to minimize total flow time:
+      the sum, across every job, of the time it spends waiting plus running.
+    </p>
+    <p>
+      This is <b>1 | r<sub>j</sub> | &Sigma;C<sub>j</sub></b> in scheduling-theory notation when there's a
+      single machine &mdash; single machine, jobs with release dates, non-preemptive, minimize total
+      completion time &mdash; and its multi-machine generalization once <code>n_machines &gt; 1</code>. The
+      strong classical baseline is <b>Shortest-Job-First</b> (SJF): whenever a machine has room, run the
+      smallest job currently waiting. It's provably near-optimal in the single-machine, exclusive-occupation
+      case, which is why it's a hard target to beat even once concurrent packing is introduced.
+    </p>
+    <div class="task-grid">
+      <div class="task-stat">
+        <div class="label">Config (this run)</div>
+        <div class="value">2 machines &middot; 10 jobs</div>
+      </div>
+      <div class="task-stat">
+        <div class="label">Objective</div>
+        <div class="value">min &Sigma; (wait + run)</div>
+      </div>
+      <div class="task-stat">
+        <div class="label">Baseline</div>
+        <div class="value">Shortest-Job-First</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The network</h2>
+    <p>
+      Two encoders read the raw state &mdash; one per job, one per machine &mdash; then a
+      <b>dual attention</b> stage lets jobs compare against each other, lets machines compare against
+      each other, and lets the two sides read one another's state directly, before anything is pooled
+      into a global summary or scored into an action.
+    </p>
+
+    <div class="diagram-card">
+      <figure>
+        <svg viewBox="0 0 900 760" role="img" aria-label="Diagram showing the dual attention scheduling network: per-job and per-machine encoders feed self-attention on each side, which feed job-to-machine and machine-to-job cross-attention, which feed pooling into a global embedding, which together with per-job and per-machine embeddings feed a per-pair actor score and a critic value.">
+
+          <defs>
+            <marker id="arrowJob" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--job)" />
+            </marker>
+            <marker id="arrowMachine" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--machine)" />
+            </marker>
+            <marker id="arrowCross" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--cross)" />
+            </marker>
+            <marker id="arrowNeutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+            </marker>
+          </defs>
+
+          <text x="225" y="28" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--job)" letter-spacing="0.04em">JOB PATH</text>
+          <text x="675" y="28" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--machine)" letter-spacing="0.04em">MACHINE PATH</text>
+
+          <rect x="70" y="46" width="310" height="46" rx="8" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="65" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">status, size, wait_time, ttl,</text>
+          <text x="225" y="80" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">usage, queue_pressure &times; 10 jobs</text>
+
+          <rect x="520" y="46" width="310" height="46" rx="8" fill="var(--surface-2)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="675" y="65" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">utilization_now,</text>
+          <text x="675" y="80" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">utilization_window &times; 2 machines</text>
+
+          <line x1="225" y1="92" x2="225" y2="120" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="675" y1="92" x2="675" y2="120" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="120" y="122" width="210" height="40" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="146" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--text)">job encoder (MLP)</text>
+
+          <rect x="570" y="122" width="210" height="40" rx="8" fill="var(--surface)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="675" y="146" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--text)">machine encoder (MLP)</text>
+
+          <line x1="225" y1="162" x2="225" y2="190" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="675" y1="162" x2="675" y2="190" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="105" y="192" width="240" height="44" rx="8" fill="var(--job-dim)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="210" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">job self-attention</text>
+          <text x="225" y="225" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">every job attends to every job</text>
+
+          <rect x="555" y="192" width="240" height="44" rx="8" fill="var(--machine-dim)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="675" y="210" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">machine self-attention</text>
+          <text x="675" y="225" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">every machine attends to every machine</text>
+
+          <line x1="225" y1="236" x2="225" y2="264" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="675" y1="236" x2="675" y2="264" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="90" y="284" width="720" height="86" rx="10" fill="var(--cross-dim)" stroke="var(--cross)" stroke-width="1.8" />
+          <text x="450" y="304" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--cross)" letter-spacing="0.03em">DUAL CROSS-ATTENTION &mdash; NEW</text>
+          <text x="450" y="323" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">job &rarr; machine: each job attends to current machine load</text>
+          <text x="450" y="341" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">machine &rarr; job: each machine attends to the jobs competing for it</text>
+          <text x="450" y="359" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">each branch gated: embeddings + GATE&times;cross_attn, GATE init = 0</text>
+
+          <line x1="225" y1="266" x2="290" y2="284" stroke="var(--job)" stroke-width="1.3" />
+          <line x1="675" y1="266" x2="610" y2="284" stroke="var(--machine)" stroke-width="1.3" />
+
+          <line x1="290" y1="370" x2="225" y2="398" stroke="var(--cross)" stroke-width="1.6" marker-end="url(#arrowCross)" />
+          <line x1="610" y1="370" x2="675" y2="398" stroke="var(--cross)" stroke-width="1.6" marker-end="url(#arrowCross)" />
+
+          <rect x="105" y="400" width="240" height="40" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5" />
+          <text x="225" y="424" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">contextualized job embeddings</text>
+
+          <rect x="555" y="400" width="240" height="40" rx="8" fill="var(--surface)" stroke="var(--machine)" stroke-width="1.5" />
+          <text x="675" y="424" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">contextualized machine embeddings</text>
+
+          <line x1="225" y1="440" x2="225" y2="466" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="675" y1="440" x2="675" y2="466" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="140" y="468" width="170" height="36" rx="7" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.2" />
+          <text x="225" y="491" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">attention pooling</text>
+
+          <rect x="590" y="468" width="170" height="36" rx="7" fill="var(--surface-2)" stroke="var(--machine)" stroke-width="1.2" />
+          <text x="675" y="491" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--text)">mean pooling</text>
+
+          <line x1="225" y1="504" x2="225" y2="532" stroke="var(--job)" stroke-width="1.5" />
+          <line x1="675" y1="504" x2="675" y2="532" stroke="var(--machine)" stroke-width="1.5" />
+          <line x1="225" y1="532" x2="450" y2="560" stroke="var(--job)" stroke-width="1.5" marker-end="url(#arrowJob)" />
+          <line x1="675" y1="532" x2="450" y2="560" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#arrowMachine)" />
+
+          <rect x="290" y="562" width="320" height="42" rx="8" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.3" />
+          <text x="450" y="581" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--text)">concat[jobs, machines, queue_pressure]</text>
+          <text x="450" y="596" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">&rarr; global_head MLP &rarr; global embedding</text>
+
+          <line x1="450" y1="604" x2="450" y2="628" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowNeutral)" />
+
+          <line x1="380" y1="640" x2="260" y2="660" stroke="currentColor" stroke-width="1.3" />
+          <line x1="450" y1="640" x2="450" y2="660" stroke="currentColor" stroke-width="1.3" />
+          <line x1="520" y1="640" x2="700" y2="660" stroke="currentColor" stroke-width="1.3" />
+
+          <rect x="120" y="662" width="280" height="66" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4" />
+          <text x="260" y="684" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--text)">actor: per-pair score</text>
+          <text x="260" y="700" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">[global, machine, job] &rarr; score_net</text>
+          <text x="260" y="715" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">&rarr; 1 logit per (machine, job)</text>
+
+          <rect x="340" y="662" width="170" height="66" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4" />
+          <text x="425" y="684" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--text)">actor: skip</text>
+          <text x="425" y="700" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">global &rarr; skip_head</text>
+          <text x="425" y="715" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">&rarr; 1 logit</text>
+
+          <rect x="560" y="662" width="220" height="66" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4" />
+          <text x="670" y="684" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--text)">critic: value</text>
+          <text x="670" y="700" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">global &rarr; value MLP</text>
+          <text x="670" y="715" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-dim)">&rarr; V(s)</text>
+
+          <line x1="260" y1="728" x2="345" y2="748" stroke="currentColor" stroke-width="1.3" />
+          <line x1="425" y1="728" x2="380" y2="748" stroke="currentColor" stroke-width="1.3" />
+
+          <text x="380" y="752" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--text)">softmax &rarr; action</text>
+        </svg>
+      </figure>
+      <figcaption>
+        Jobs and machines are encoded and self-attended in parallel, then cross-attend to each
+        other (the dual-attention step) before pooling into a global embedding. The actor scores
+        every (machine, job) pair using that pair's own embeddings alongside the shared global
+        context; the critic sees only the global context.
+      </figcaption>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch job-sw"></span>job path</div>
+        <div class="legend-item"><span class="swatch machine-sw"></span>machine path</div>
+        <div class="legend-item"><span class="swatch cross-sw"></span>dual cross-attention (new)</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="note">
+    <div class="label">Why this exists</div>
+    <p>
+      Adapted from <i>"Flexible Job Shop Scheduling via Dual Attention Network Based Reinforcement
+      Learning"</i> (Wang et al., arXiv:2305.05119). Before this change, machine choice came from a
+      static per-machine identity vector with no awareness of load; job embeddings never saw machine
+      state at all. The dual cross-attention block is the one addition that lets both sides read each
+      other's live state before a single (machine, job) pair gets scored.
+    </p>
+    <p>
+      <b>Gated, not full-strength.</b> The first version (run <code>ddsv1ozh</code>) folded each
+      cross-attention branch in immediately at full strength and made the policy more <i>decisive</i>
+      without being more <i>accurate</i> &mdash; both its win rate and loss rate vs. SJF rose together.
+      Each branch is now scaled by a learnable per-channel gate initialized to zero (LayerScale,
+      Touvron et al. 2021): <code>embeddings + GATE &times; cross_attn_output</code>, with
+      <code>GATE = 0</code> at init. Training starts equivalent to the no-cross-attention baseline and
+      only grows a gate where that signal actually earns its keep.
+    </p>
+    <p>
+      <b>Job input added: <code>usage</code>.</b> The cluster generator changed so each job now
+      claims a random fraction of a machine's capacity (10&ndash;50%, broadcast identically across
+      every resource/time cell) instead of always claiming full capacity &mdash; so multiple jobs can
+      genuinely run concurrently on one machine (bin-packing), not just sequentially. A first PPO run
+      trained on this new generator lost to SJF in <b>97.42%</b> of episodes (run <code>h0vwcu5e</code>)
+      despite training cleanly, because nothing in the feature set told the policy how much of a
+      machine a job would occupy &mdash; SJF doesn't need that (it ignores occupancy by construction),
+      but a policy reasoning about concurrent packing cannot function without it. Fixed by adding
+      <code>usage</code> as a per-job feature: a single scalar read from one cell of the job's usage
+      matrix (any cell works, since the value is now uniform across the whole matrix), normalized by
+      <code>max_capacity</code>.
+    </p>
+  </div>
+
+  <footer>src/scheduling_simulator/expiremnt/feature_extractor/new_features.py &middot; src/scheduling_simulator/expiremnt/policy/new_sched.py</footer>
+
+</div>

@@ -3,8 +3,8 @@ import wandb
 
 PROJECT = "dev0guy/cluster-scheduling-simulator"
 
-RUN_A = "33xw8fke"  # PPO
-RUN_B = "3lm3wkgs"  # Random
+RUN_A = "6b195fqa"  # PPO (reconstructed np7aenua baseline: status/size/wait_time/ttl/arrival only, no queue_pressure, no self-attention, gamma=0.995, 2M steps, 5000 eval episodes)
+RUN_B = "mkl0zwp7"  # SJF baseline, reverted exclusive-occupation task (5000 eval episodes)
 
 
 METRICS = {
@@ -29,11 +29,13 @@ def compare_metric(
     history_a = run_a.history(
         keys=[X_AXIS, metric],
         pandas=True,
+        samples=10_000,
     )
 
     history_b = run_b.history(
         keys=[X_AXIS, metric],
         pandas=True,
+        samples=10_000,
     )
 
     # ---------------------------------------------------------

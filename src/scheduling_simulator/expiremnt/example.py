@@ -21,7 +21,7 @@ config: "ClusterGenerationConfig" = {
 runner = ExperimentRunner(
     config,
     train_steps=2_000_000,
-    evalution_steps=100,
+    evalution_steps=5000,
     policy_kwargs={
         "embedding_dim": 256,
         "n_machines": config["n_machines"],

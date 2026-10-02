@@ -56,34 +56,51 @@ cdef deeprm_generate_single_job_decreasing_size(ClusterGenerationConfig config, 
         int size
         int arrival_time
         double progress
-        double noise
+        double arrival_progress
+        double size_progress
         int max_size = config.n_time
         int min_size = 1
+        int low
+        int high
+        int utilization
 
     # progress still trends 0 -> 1 across job_index (so job order remains
-    # a meaningful, learnable signal), but each job independently jitters
-    # around its expected position instead of landing on an exact fixed
-    # value every episode.
+    # a meaningful, learnable signal). arrival_time and size each get
+    # their OWN independently-jittered copy of progress (rather than
+    # sharing one jittered value) so the two are no longer near-perfectly
+    # anti-correlated -- that near-perfect correlation is exactly what
+    # let a plain SJF heuristic match/beat the trained policy for free,
+    # since "arrived first" and "smallest" stopped being reliably the
+    # same job.
     progress = job_index / max(1.0, <double>(n_jobs - 1))
 
-    # jitter progress itself by +/- up to 0.15, clipped to [0, 1] -- this
-    # randomizes both arrival_time and size together (since both derive
-    # from progress), while preserving the overall large-early/small-late
-    # trend on average across episodes.
-    noise = random.uniform(-0.15, 0.15)
-    progress = min(1.0, max(0.0, progress + noise))
+    arrival_progress = min(1.0, max(0.0, progress + random.uniform(-0.35, 0.35)))
+    size_progress = min(1.0, max(0.0, progress + random.uniform(-0.35, 0.35)))
 
-    arrival_time = <int>(progress * (config.n_time // 2))
+    arrival_time = <int>(arrival_progress * (config.n_time // 2))
     # add independent small randomness to arrival_time too, so identical
     # progress values don't always land on the identical tick
-    arrival_time = max(0, arrival_time + random.integers(-1, 2))  # +/- 1 tick jitter
+    arrival_time = max(0, arrival_time + random.integers(-3, 4))  # +/- 3 tick jitter
 
-    size = <int>(max_size - progress * (max_size - min_size))
+    size = <int>(max_size - size_progress * (max_size - min_size))
     # independent randomness on size as well, so size isn't a perfectly
     # deterministic function of arrival_time either
-    size = size + random.integers(-2, 3)  # +/- 2 jitter
+    size = size + random.integers(-5, 6)  # +/- 5 jitter
     size = max(1, min(config.n_time, size))
 
+    # Reverted to the original exclusive-occupation task: every job
+    # claims full machine capacity (255) on every resource, so a
+    # machine can only ever run one job at a time -- no bin-packing.
+    #
+    # The random per-job utilization variant (bin-packing, jobs claim a
+    # random fraction of capacity so multiple can run concurrently) was
+    # tried across experiment log #16-21 and never reached parity with
+    # SJF on that task (best result: mean reward margin -15.77%, and
+    # two reruns of that same architecture landed around -26%, see
+    # #20-21 and the follow-up reruns) -- reverted here to compare the
+    # current architecture against the original task, where it's
+    # previously matched the literal optimal schedule on 90.68% of
+    # episodes (see experiment log #14).
     for resource_idx in range(config.n_resource):
         usage[resource_idx, :size] = 255
 

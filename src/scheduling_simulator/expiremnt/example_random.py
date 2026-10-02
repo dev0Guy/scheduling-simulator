@@ -19,8 +19,8 @@ def main() -> None:
     }
     runner = RandomBaselineRunner(
         config=config,
-        evalution_steps=100,
-        max_time=250,
+        evalution_steps=5000,
+        max_time=110,
         seed=42,
     )
     runner.run()

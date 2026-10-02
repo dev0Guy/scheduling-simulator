@@ -77,6 +77,12 @@ class SchedulingActionHead(nn.Module):
     """
     Produces one logit for every action.
 
+    Reconstructed to be exactly the `g231w4jg` architecture (see
+    experiment log #22): machines are represented by a static identity
+    embedding (`nn.Embedding(n_machines, embedding_dim)`), not a
+    dynamic, state-dependent embedding -- the dual-attention machine
+    encoder/cross-attention from later experiments is removed here.
+
     Action ordering:
 
         0
@@ -99,7 +105,7 @@ class SchedulingActionHead(nn.Module):
 
         global state
         +
-        machine embedding
+        machine embedding (static identity)
         +
         job embedding
     """
