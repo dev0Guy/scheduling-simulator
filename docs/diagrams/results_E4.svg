@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 468" width="900" height="468">
+<style>
+  text { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #1f2328; }
+  .t { font-size: 13px; font-weight: 600; }
+  .s { font-size: 11.5px; fill: #57606a; }
+  .h { font-size: 17px; font-weight: 700; }
+  .base { fill: #eaf1fb; stroke: #5b8fd6; stroke-width: 1.4; }
+  .new  { fill: #e3f6e8; stroke: #2da44e; stroke-width: 2.2; }
+  .side { fill: #fff6e0; stroke: #d4a72c; stroke-width: 1.4; }
+  .io   { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1.2; }
+  .bad  { fill: #ffebe9; stroke: #cf222e; stroke-width: 1.6; }
+  .arr  { stroke: #6e7781; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .sarr { stroke: #d4a72c; stroke-width: 1.6; fill: none; marker-end: url(#a2); stroke-dasharray: 5 4; }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6e7781"/></marker>
+  <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#d4a72c"/></marker>
+</defs>
+<rect width="900" height="468" fill="#ffffff"/><text x="40" y="30" class="h">E4 results: mean reward margin vs SJF = (PPO - SJF) / |SJF|</text><text x="40" y="52" class="s">5000 deterministic episodes, same job sets as the SJF baseline rjzcixv2 (mean reward -50.43). Right of the line = better than SJF.</text><line x1="770" y1="72" x2="770" y2="440" stroke="#1f2328" stroke-width="1.5"/><text x="770" y="68" text-anchor="middle" class="s">0% (= SJF)</text><rect x="770.0" y="80" width="35.7" height="28" rx="4" fill="#5b8fd6"/><text x="813.7" y="99" class="t">+11.90%</text><text x="40" y="99" class="t">Optimal (exact)</text><text x="170" y="99" class="s">script</text><rect x="770.0" y="126" width="6.93" height="28" rx="4" fill="#2da44e"/><text x="784.93" y="145" class="t">+2.31%</text><text x="40" y="145" class="t">M10</text><text x="170" y="145" class="s">ne5qv1d2</text><rect x="770.0" y="172" width="6.84" height="28" rx="4" fill="#2da44e"/><text x="784.84" y="191" class="t">+2.28%</text><text x="40" y="191" class="t">M9</text><text x="170" y="191" class="s">etudt4qo</text><rect x="719.39" y="218" width="50.61" height="28" rx="4" fill="#cf222e"/><text x="778" y="237" class="t">-16.87%</text><text x="40" y="237" class="t">M7</text><text x="170" y="237" class="s">emt46quc</text><rect x="694.1" y="264" width="75.9" height="28" rx="4" fill="#cf222e"/><text x="778" y="283" class="t">-25.30%</text><text x="40" y="283" class="t">M8</text><text x="170" y="283" class="s">bv1hk6lb</text><rect x="659.06" y="310" width="110.94" height="28" rx="4" fill="#cf222e"/><text x="778" y="329" class="t">-36.98%</text><text x="40" y="329" class="t">M6</text><text x="170" y="329" class="s">iusicvre</text><rect x="632.5699999999999" y="356" width="137.43" height="28" rx="4" fill="#cf222e"/><text x="778" y="375" class="t">-45.81%</text><text x="40" y="375" class="t">M5</text><text x="170" y="375" class="s">z4sayojp</text><rect x="276.20000000000005" y="402" width="493.79999999999995" height="28" rx="4" fill="#cf222e"/><text x="778" y="421" class="t">-164.60%</text><text x="40" y="421" class="t">M0</text><text x="170" y="421" class="s">cf2zhwti</text></svg>

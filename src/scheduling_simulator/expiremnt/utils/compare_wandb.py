@@ -3,8 +3,8 @@ import wandb
 
 PROJECT = "dev0guy/cluster-scheduling-simulator"
 
-RUN_A = "6b195fqa"  # PPO (reconstructed np7aenua baseline: status/size/wait_time/ttl/arrival only, no queue_pressure, no self-attention, gamma=0.995, 2M steps, 5000 eval episodes)
-RUN_B = "mkl0zwp7"  # SJF baseline, reverted exclusive-occupation task (5000 eval episodes)
+RUN_A = "ne5qv1d2"
+RUN_B = "rjzcixv2"  # SJF, 3-level usage task
 
 
 METRICS = {

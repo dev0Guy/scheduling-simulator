@@ -1,5 +1,5 @@
 """
-Replay the exact-optimal job order (scripts/optimal_solver.py) through the
+Replay the exact-optimal job order (scripts/solvers/optimal_solver.py) through the
 real environment for each of N episodes, using the same seed convention
 (seed = 42 + episode) as random_runner.py / train_runner.py, so results
 are directly comparable to the existing SJF and PPO runs episode-for-episode.
@@ -11,7 +11,7 @@ import os
 import sys
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from scheduling_simulator.core.job import JobStatus

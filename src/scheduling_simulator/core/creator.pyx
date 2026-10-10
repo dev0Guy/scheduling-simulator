@@ -88,21 +88,16 @@ cdef deeprm_generate_single_job_decreasing_size(ClusterGenerationConfig config, 
     size = size + random.integers(-5, 6)  # +/- 5 jitter
     size = max(1, min(config.n_time, size))
 
-    # Reverted to the original exclusive-occupation task: every job
-    # claims full machine capacity (255) on every resource, so a
-    # machine can only ever run one job at a time -- no bin-packing.
-    #
-    # The random per-job utilization variant (bin-packing, jobs claim a
-    # random fraction of capacity so multiple can run concurrently) was
-    # tried across experiment log #16-21 and never reached parity with
-    # SJF on that task (best result: mean reward margin -15.77%, and
-    # two reruns of that same architecture landed around -26%, see
-    # #20-21 and the follow-up reruns) -- reverted here to compare the
-    # current architecture against the original task, where it's
-    # previously matched the literal optimal schedule on 90.68% of
-    # episodes (see experiment log #14).
-    for resource_idx in range(config.n_resource):
-        usage[resource_idx, :size] = 255
+    # Per-resource usage: every resource except the last one gets its own
+    # value, drawn independently from the three levels, so two resources
+    # can be equal or different. The last resource is never used (always
+    # 0), so only the first n_resource - 1 resources limit what fits.
+    possible_options = [64, 128, 255]
+    for resource_idx in range(config.n_resource - 1):
+        usage[resource_idx, :size] = random.choice(possible_options)
+    # usage[config.n_resource - 1, :] stays 0
+
+
 
     return Job(usage=usage, arrival_time=arrival_time, size=size)
 

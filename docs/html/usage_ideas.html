@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage ideas explained</title>
+<style>
+:root{--bg:#fafafa;--fg:#1c1c1e;--mut:#5f6368;--card:#fff;--bd:#d9dce1;--a:#2b6cb0;--g:#2f855a;--o:#c05621;--r:#b83280;--cell0:#eef2f7;--ok:#2f855a;--no:#c53030}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e8eaed;--mut:#9aa0a6;--card:#1f2228;--bd:#383d46;--a:#63b3ed;--g:#68d391;--o:#f6ad55;--r:#f687b3;--cell0:#2a2f38;--ok:#68d391;--no:#fc8181}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,Helvetica,Arial,sans-serif;padding:24px 16px}
+main{max-width:980px;margin:auto}h1{font-size:24px;margin:0 0 6px}h2{font-size:18px;margin:0 0 6px}p{margin:6px 0}.mut{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px;margin:16px 0}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--bd);border-radius:20px;padding:1px 9px;margin-left:6px;color:var(--mut)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}th,td{border:1px solid var(--bd);padding:5px 8px;text-align:center}th{background:var(--cell0)}
+.ok{color:var(--ok);font-weight:600}.no{color:var(--no);font-weight:600}
+svg{max-width:100%;height:auto;display:block;margin:8px 0}svg text{fill:var(--fg);font-size:12px;font-family:inherit}svg .m{fill:var(--mut)}
+code{background:var(--cell0);padding:1px 5px;border-radius:4px;font-size:13px}
+.row{display:flex;gap:18px;flex-wrap:wrap}.row>div{flex:1 1 300px}
+</style></head><body><main>
+<h1>How to help the model understand usage</h1>
+<p class="mut">One shared example is used in every section so the ideas can be compared. One machine, capacity 255 on 3 resources (R0, R1, R2).</p>
+
+<div class="card"><h2>The shared example</h2>
+<p>A job <b>R</b> is already running and will finish in 4 ticks. Three jobs are pending. Usage is [R0, R1, R2].</p>
+<table><tr><th>Job</th><th>State</th><th>Usage</th><th>Size</th></tr>
+<tr><td>R</td><td>running, ttl 4</td><td>[128, 64, 64]</td><td>–</td></tr>
+<tr><td>A</td><td>pending</td><td>[100, 128, 64]</td><td>3</td></tr>
+<tr><td>B</td><td>pending</td><td>[255, 128, 64]</td><td>6</td></tr>
+<tr><td>C</td><td>pending</td><td>[64, 64, 128]</td><td>2</td></tr></table>
+<p><b>Machine free capacity over the next ticks (R0):</b> R keeps 128 busy for 4 ticks, then the machine is empty.</p>
+<svg viewBox="0 0 560 120" role="img" aria-label="Free R0 capacity over time">
+<g id="b"></g>
+<text class="m" x="0" y="14">free R0</text>
+<script>/*bars drawn below*/</script>
+<g>
+<rect x="60" y="30" width="200" height="66" fill="#63b3ed" opacity=".85"/><rect x="260" y="10" width="280" height="86" fill="#68d391" opacity=".85"/>
+<text x="70" y="68">127 free (t0–t3)</text><text x="270" y="58">255 free (t4–t9)</text>
+<line x1="60" y1="96" x2="540" y2="96" stroke="currentColor"/><text class="m" x="60" y="112">t0</text><text class="m" x="258" y="112">t4: R ends</text><text class="m" x="520" y="112">t9</text>
+</g></svg>
+<p class="mut">Today the model sees only <code>min over time = 127</code>, the left bar. It cannot see that capacity doubles at t4.</p></div>
+
+<div class="card"><h2>1. Pair features for every (job, machine) <span class="tag">biggest payoff</span></h2>
+<p>Instead of making the network guess whether a job fits, give it the numbers directly, computed from the machine's free-capacity timeline.</p>
+<table><tr><th>Job</th><th>Fits now</th><th>Delay until it fits</th><th>Headroom after placing [R0,R1,R2]</th><th>Dominant share</th><th>Packing score</th></tr>
+<tr><td>A</td><td class="ok">yes</td><td>0</td><td>[27, 63, 127]</td><td>0.50</td><td>0.76</td></tr>
+<tr><td>B</td><td class="no">no</td><td>4 (R ends)</td><td>–</td><td>1.00</td><td>–</td></tr>
+<tr><td>C</td><td class="ok">yes</td><td>0</td><td>[63, 127, 63]</td><td>0.50</td><td>0.69</td></tr></table>
+<p><b>Why it helps:</b> B cannot start for 4 ticks no matter what. The model can see that and choose to run A or C in the meantime, knowing exactly how long B will wait. Dominant share is the largest of usage ÷ capacity across resources. The packing score is <code>usage · free</code> normalised: the higher it is, the tighter the job fills the free space.</p></div>
+
+<div class="card"><h2>2. A dynamic machine embedding</h2>
+<p>Today the actor uses a fixed per-machine vector (<code>nn.Embedding</code>) that never changes, so it carries no state. The idea is to encode the machine's free-capacity grid (3 resources × 10 ticks) with the same per-row encoder used for jobs.</p>
+<div class="row"><div><p class="mut">Free capacity grid the encoder would read (darker = less free):</p>
+<svg viewBox="0 0 340 130"><g id="g2"></g>
+<script>
+</script></svg></div>
+<div><p><b>Before:</b> machine vector = a constant, the same every tick.</p><p><b>After:</b> machine vector = <code>f(grid)</code>, so it changes as jobs start and finish. The final layer starts at zero, so training begins where it does now.</p></div></div></div>
+
+<div class="card"><h2>3. Job–job compatibility matrix</h2>
+<p>For every pair of jobs, mark whether they fit together on an empty machine (summed usage ≤ 255 on every resource). This goes into the job self-attention as a bias, so attention between compatible jobs is easier.</p>
+<table><tr><th></th><th>A</th><th>B</th><th>C</th></tr>
+<tr><th>A</th><td>–</td><td class="no">✗ R0: 355</td><td class="ok">✓</td></tr>
+<tr><th>B</th><td class="no">✗ R0: 355</td><td>–</td><td class="no">✗ R0: 319</td></tr>
+<tr><th>C</th><td class="ok">✓</td><td class="no">✗ R0: 319</td><td>–</td></tr></table>
+<p><b>Why it helps:</b> it shows at a glance that A and C can run side by side and B cannot share with anything. Then the model can plan: run A and C together, B after.</p></div>
+
+<div class="card"><h2>4. Usage in the job encoder</h2>
+<p>Today the job encoder input is <code>[status, size, wait, ttl, arrival]</code>. Usage only enters later through the fit attention. The change is to add usage and headroom to the input.</p>
+<table><tr><th></th><th>Input for job A</th></tr>
+<tr><td>Now</td><td>[status=pending, size 3, wait 0, ttl 3, arrival 0]</td></tr>
+<tr><td>After</td><td>[status=pending, size 3, wait 0, ttl 3, arrival 0, <b>usage 0.39, 0.50, 0.25</b>, <b>headroom 0.11, 0.25, 0.50</b>]</td></tr></table>
+<p><b>Why it helps now:</b> this was removed earlier because usage was identical on all resources, so it was redundant with size. With different values per resource, it carries real information.</p></div>
+
+<div class="card"><h2>5. Start from SJF, then learn <span class="tag">most reliable</span></h2>
+<p>Add a fixed prior to the action logits: <code>−α · size</code> for jobs that fit and a large penalty for jobs that don't. At the start of training the policy behaves like SJF, and PPO only has to learn where to deviate.</p>
+<svg viewBox="0 0 620 190"><g id="g5"></g>
+<text class="m" x="0" y="12">probability of each action at the start of training</text></svg>
+<p class="mut">Left bar of each pair: random start (uniform). Right bar: with the prior (α = 0.5, skip logit −3, doesn't-fit penalty −5). C, the shortest job that fits, gets 57%. B, which doesn't fit, gets almost nothing.</p></div>
+
+<div class="card"><h2>6. Imitation warm-start <span class="tag">optional</span></h2>
+<p>Same goal as 5, different method: pre-train the policy by supervised learning to copy a heuristic, then continue with PPO.</p>
+<svg viewBox="0 0 700 80"><g font-size="12">
+<rect x="2" y="20" width="150" height="44" rx="8" fill="none" stroke="currentColor"/><text x="12" y="46">fit-aware SJF plays</text>
+<rect x="190" y="20" width="160" height="44" rx="8" fill="none" stroke="currentColor"/><text x="200" y="46">(state, action) pairs</text>
+<rect x="390" y="20" width="140" height="44" rx="8" fill="none" stroke="currentColor"/><text x="400" y="46">cross-entropy fit</text>
+<rect x="570" y="20" width="126" height="44" rx="8" fill="none" stroke="currentColor"/><text x="580" y="46">PPO fine-tune</text>
+<path d="M152 42h38M350 42h40M530 42h40" stroke="currentColor" fill="none"/></g></svg>
+<p><b>Trade-off:</b> it needs an extra training stage and a baseline to copy. The prior in 5 gives most of the benefit with a few lines of code.</p></div>
+
+<script>
+// grid for section 2: rows R0..R2, 10 ticks
+(function(){var g=document.getElementById('g2'),free=[[127,127,127,127,255,255,255,255,255,255],[191,191,191,191,255,255,255,255,255,255],[191,191,191,191,255,255,255,255,255,255]],s='';
+free.forEach(function(r,i){s+='<text class="m" x="0" y="'+(26+i*34)+'">R'+i+'</text>';r.forEach(function(v,j){var o=(255-v)/255*0.85+0.1;s+='<rect x="'+(24+j*31)+'" y="'+(10+i*34)+'" width="29" height="30" fill="#4a7fbf" opacity="'+(1-v/255*0.8).toFixed(2)+'"/>';});});
+s+='<text class="m" x="24" y="122">t0</text><text class="m" x="272" y="122">t9</text>';g.innerHTML=s;})();
+// section 5 bars
+(function(){var g=document.getElementById('g5'),names=['skip','A','B (no fit)','C'],after=[7.8,34.8,0.05,57.4],s='';
+names.forEach(function(n,i){var x=40+i*145;s+='<rect x="'+x+'" y="'+(160-25)+'" width="40" height="25" fill="#9aa0a6"/><rect x="'+(x+46)+'" y="'+(160-after[i]*1.2)+'" width="40" height="'+Math.max(after[i]*1.2,1)+'" fill="#c05621"/>';
+s+='<text x="'+x+'" y="176">'+n+'</text><text class="m" x="'+x+'" y="'+(150-25)+'">25%</text><text x="'+(x+46)+'" y="'+(154-after[i]*1.2)+'">'+after[i]+'%</text>';});g.innerHTML=s;})();
+</script>
+</main></body></html>

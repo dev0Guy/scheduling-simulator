@@ -78,7 +78,7 @@ class RandomBaselineRunner:
         n_jobs = self.config['n_jobs']
         return 1 + machine_idx * n_jobs + job_idx
 
-    def _evaluate(self, *, n_episodes: int, video_every: int = 1) -> None:
+    def _evaluate(self, *, n_episodes: int, video_every: int = 100) -> None:
         for ep in range(n_episodes):
             record_this_ep = (ep % video_every == 0)
             envs = self.generate_enviroemnt(

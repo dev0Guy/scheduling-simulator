@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 1560" font-family="Helvetica, Arial, sans-serif" font-size="14">
+<defs>
+<marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#333"/></marker>
+<style>
+.b{fill:#fff;stroke:#333;stroke-width:1.5;rx:8}
+.obs{fill:#e8f1fb;stroke:#2b6cb0}.enc{fill:#e9f7ec;stroke:#2f855a}.att{fill:#fff4e0;stroke:#c05621}
+.act{fill:#fde8ee;stroke:#b83280}.crit{fill:#efe8fb;stroke:#6b46c1}.env{fill:#f1f1f1;stroke:#555}
+.t{font-weight:bold;font-size:15px}.s{font-size:12.5px;fill:#444}.h{font-size:20px;font-weight:bold}
+.l{stroke:#333;stroke-width:1.6;fill:none;marker-end:url(#a)}.d{stroke-dasharray:6 4}
+</style></defs>
+<rect width="1300" height="1560" fill="#fafafa"/>
+<text x="650" y="34" text-anchor="middle" class="h">Current architecture: M9 + optional per_resource_fit (PPO, 1 machine, 10 jobs, 3 resources)</text>
+
+<!-- OBS -->
+<rect class="b obs" x="40" y="60" width="760" height="130"/>
+<text x="60" y="84" class="t">Observation (Dict)</text>
+<text x="60" y="108" class="s">Jobs ×10: status (0 NOT_CREATED,1 PENDING,2 RUNNING,3 COMPLETED), size, wait_time, ttl, arrival, usage [3 res × 10 time]</text>
+<text x="60" y="132" class="s">Machine ×1: capacity, usage [3 res × 10 time] (sliding window, shifted left each tick)</text>
+<text x="60" y="156" class="s">Normalised by max_time=110 / max_capacity=255</text>
+<rect class="b env" x="830" y="60" width="430" height="130"/>
+<text x="850" y="84" class="t">Env stack</text>
+<text x="850" y="108" class="s">DummyVecEnv → Monitor → FailureSkipTimeWrapper → SchedulingEnv</text>
+<text x="850" y="130" class="s">Action: 0 = skip, 1 + machine·10 + job = allocate</text>
+<text x="850" y="152" class="s">Failed allocation → penalty + burns 1 tick</text>
+<text x="850" y="174" class="s">Generator: 1 utilization/job (10–50% of 255) on all 3 res.</text>
+
+<line class="l" x1="300" y1="190" x2="300" y2="236"/>
+<line class="l" x1="640" y1="190" x2="860" y2="236"/>
+
+<!-- FEATURE EXTRACTOR frame -->
+<rect x="20" y="214" width="1260" height="720" rx="14" fill="none" stroke="#2f855a" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="40" y="236" class="t" fill="#2f855a" style="fill:#2f855a">Features extractor: StatusSizeWaitTtlCapacityFeaturesExtractor (embedding_dim = 256)</text>
+
+<!-- job encoder -->
+<rect class="b enc" x="40" y="260" width="520" height="150"/>
+<text x="60" y="284" class="t">1. Job encoder (per job, shared weights)</text>
+<text x="60" y="308" class="s">status → Embedding(16)  ⊕  [size, wait_time, ttl, arrival]</text>
+<text x="60" y="332" class="s">MLP: Linear → LayerNorm → ReLU  ×2</text>
+<text x="60" y="356" class="s">out: job_emb [B, 10, 256]</text>
+<text x="60" y="380" class="s">usage does NOT enter here (only via fit attention)</text>
+
+<!-- machine/ job usage reduction -->
+<rect class="b obs" x="600" y="260" width="660" height="150"/>
+<text x="620" y="284" class="t">2a. Usage reduction (max over time)</text>
+<text x="620" y="308" class="s">job_usage = amax(time)/255 ∈[0,1]    machine_free = amin(capacity−usage over time)/255</text>
+<text x="620" y="332" class="s">default: also max over resources → scalar [B,10] / [B,1]</text>
+<text x="620" y="356" class="s">per_resource_fit=True: keep 3 values → [B,10,3] / [B,1,3]</text>
+<text x="620" y="380" class="s">can_fit[j,m] = all_res(job_usage ≤ machine_free + 1e-6)   (feasibility mask)</text>
+
+<line class="l" x1="300" y1="410" x2="300" y2="470"/>
+<line class="l" x1="930" y1="410" x2="930" y2="440"/>
+
+<!-- fit attention -->
+<rect class="b att" x="600" y="440" width="660" height="150"/>
+<text x="620" y="464" class="t">2b. Fit attention (job → machine)</text>
+<text x="620" y="488" class="s">shared scalar_mlp: Linear(1 or 3 → 64) → query (job), key/value (machine)</text>
+<text x="620" y="512" class="s">sigmoid(q·k) × can_fit  →  weighted machine value  [B,10,64]</text>
+<text x="620" y="536" class="s">fit_dim = 64</text>
+<line class="l" x1="600" y1="515" x2="580" y2="515" style="display:none"/>
+
+<!-- fuse -->
+<rect class="b enc" x="40" y="470" width="520" height="120"/>
+<text x="60" y="494" class="t">3. fit_fuse</text>
+<text x="60" y="518" class="s">concat(job_emb 256, fit 64) → Linear(320→256) → LayerNorm → ReLU</text>
+<text x="60" y="542" class="s">out: [B, 10, 256]</text>
+<path class="l" d="M600,530 L560,530"/>
+
+<line class="l" x1="300" y1="590" x2="300" y2="640"/>
+
+<!-- self attn -->
+<rect class="b att" x="40" y="640" width="520" height="130"/>
+<text x="60" y="664" class="t">4. Job self-attention</text>
+<text x="60" y="688" class="s">MultiheadAttention, 4 heads; COMPLETED jobs masked as keys</text>
+<text x="60" y="712" class="s">(guard when all jobs completed)</text>
+<text x="60" y="736" class="s">residual + LayerNorm → job_feats [B,10,256]</text>
+
+<!-- pooling -->
+<rect class="b att" x="600" y="640" width="660" height="130"/>
+<text x="620" y="664" class="t">5. Attention pooling (Deep-Sets style)</text>
+<text x="620" y="688" class="s">scorer(job_feats) → softmax weights over jobs → weighted sum</text>
+<text x="620" y="712" class="s">global_head (MLP) → global [B,256]</text>
+<line class="l" x1="560" y1="705" x2="600" y2="705"/>
+
+<line class="l" x1="300" y1="770" x2="300" y2="830"/>
+<line class="l" x1="930" y1="770" x2="700" y2="830"/>
+
+<rect class="b enc" x="40" y="830" width="1220" height="80"/>
+<text x="60" y="856" class="t">6. Output features: [ global | job_0 | job_1 | … | job_9 ]   shape [B, 256 × 11]</text>
+<text x="60" y="882" class="s">Actor gets the full vector; critic gets only the first 256 (global embedding) via SchedulingMlpExtractor (Identity nets, net_arch pi=[] vf=[])</text>
+
+<!-- POLICY -->
+<line class="l" x1="300" y1="934" x2="300" y2="990"/>
+<line class="l" x1="900" y1="934" x2="900" y2="990"/>
+<rect x="20" y="960" width="1260" height="440" rx="14" fill="none" stroke="#b83280" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="40" y="982" class="t" style="fill:#b83280">NewSchedulingPolicy (ActorCriticPolicy, Adam, ortho_init=False)</text>
+
+<rect class="b act" x="40" y="1000" width="760" height="270"/>
+<text x="60" y="1024" class="t">Actor: SchedulingActionHead</text>
+<text x="60" y="1048" class="s">machine identity: nn.Embedding(n_machines, 256)</text>
+<text x="60" y="1072" class="s">pair (m, j): concat[global, machine_emb, job_j] (768)</text>
+<text x="60" y="1096" class="s">score_net: Linear(768→128) → ReLU → Linear(128→128) → ReLU → Linear(128→1)</text>
+<text x="60" y="1124" class="s">skip: skip_head on global: Linear(256→64) → ReLU → Linear(64→1)</text>
+<text x="60" y="1152" class="s">logits = [ skip | pair(m0,j0) … pair(m0,j9) ]   size 1 + 1×10 = 11</text>
+<text x="60" y="1180" class="s">→ Categorical (softmax) → sampled action</text>
+<text x="60" y="1208" class="s">No invalid-action mask: infeasible picks are learned away via failure penalty</text>
+
+<rect class="b crit" x="830" y="1000" width="430" height="270"/>
+<text x="850" y="1024" class="t">Critic: SchedulingValueNet</text>
+<text x="850" y="1048" class="s">input: global embedding [B,256]</text>
+<text x="850" y="1072" class="s">Linear(256→256) → ReLU</text>
+<text x="850" y="1096" class="s">Linear(256→256) → ReLU</text>
+<text x="850" y="1120" class="s">Linear(256→1) → V(s)</text>
+
+<line class="l" x1="420" y1="1270" x2="420" y2="1310"/>
+<line class="l" x1="1045" y1="1270" x2="1045" y2="1310"/>
+<rect class="b act" x="40" y="1310" width="760" height="70"/>
+<text x="60" y="1338" class="t">action → env.step</text>
+<text x="60" y="1362" class="s">skip: advance 1 tick (reward = −#PENDING/RUNNING) · allocate ok: +1 · invalid: penalty + 1 tick</text>
+<rect class="b crit" x="830" y="1310" width="430" height="70"/>
+<text x="850" y="1338" class="t">value → GAE (γ=λ=0.995)</text>
+<text x="850" y="1362" class="s">terminal: +100 all done / −100 at time cap</text>
+
+<!-- PPO -->
+<rect class="b env" x="40" y="1420" width="1220" height="110"/>
+<text x="60" y="1446" class="t">PPO training / eval</text>
+<text x="60" y="1470" class="s">lr 7e-6 · n_steps 2048 · batch 64 · epochs 5 · clip 0.2 · vf_coef 0.5 · max_grad_norm 0.5 · ent_coef 0.05 → 0.01 (EntCoefScheduler) · 2M steps</text>
+<text x="60" y="1494" class="s">EvalCallback every 50k steps (10 episodes) · WandbCallback · reference run etudt4qo: reward −49.28 vs SJF −50.43</text>
+<text x="60" y="1518" class="s">Not used by M9: pointer-network head, not-created mask (M11)</text>
+</svg>
