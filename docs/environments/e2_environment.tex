@@ -1,0 +1,174 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\N}{N}              % number of jobs
+\newcommand{\R}{R}              % number of resources
+\newcommand{\Tw}{T}             % usage window length
+\newcommand{\Cap}{C}            % machine capacity
+
+\title{Environment E2: Scheduling Jobs With Random Resource Usage\\
+\large Objective, Reward, Observation Space and Action Space}
+\author{Cluster scheduling simulator}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{What E2 is}
+
+E2 is the first environment in which several jobs can run on the machine at the same time. In E1 every job used the whole machine (usage $255$ on every resource), so jobs ran strictly one after another. In E2 each job asks for a random part of the machine, so a scheduler has to decide both \emph{which} job to start and \emph{whether it fits} next to the jobs that are already running. It is an online scheduling problem with a bin-packing constraint.
+
+\paragraph{Instance.} One machine, $\N = 10$ jobs, $\R = 3$ resources, a usage window of $\Tw = 10$ ticks, and capacity $\Cap = 255$ per resource and per tick. Job $j$ has
+
+\begin{itemize}[noitemsep]
+  \item an \textbf{arrival time} $a_j \in \mathbb{N}_0$: the tick at which it becomes visible and can be started,
+  \item a \textbf{size} $p_j \in \{1,\dots,\Tw\}$: the number of ticks it runs once started,
+  \item a \textbf{demand} $d_j$: one value, the same for every resource and every tick of its run.
+\end{itemize}
+
+In E2 the demand is drawn once per job, uniformly between $10\%$ and $50\%$ of capacity (about $25$ to $127$ units out of $255$). In the job's usage array $u_j \in \mathbb{R}^{\R \times \Tw}$ the first $p_j$ columns equal $d_j$ and the rest are $0$. So any two jobs always fit together, and several small ones can.
+
+\paragraph{How arrivals and sizes are generated.} Let $\rho_j = j/(\N-1)$ be the job's position in the order. Arrival and size use two separate jittered copies of $\rho_j$, so they are not perfectly correlated:
+\begin{align*}
+  a_j &= \max\!\Big(0,\ \big\lfloor \tilde\rho_j^{(a)} \cdot \lfloor \Tw/2 \rfloor \big\rfloor + k_j\Big), & k_j &\sim \mathcal{U}\{-3,\dots,3\},\\
+  p_j &= \operatorname{clip}\!\Big(\big\lfloor \Tw - \tilde\rho_j^{(p)}(\Tw-1) \big\rfloor + k'_j,\ 1,\ \Tw\Big), & k'_j &\sim \mathcal{U}\{-5,\dots,5\},
+\end{align*}
+where $\tilde\rho^{(\cdot)}_j = \operatorname{clip}\big(\rho_j + \epsilon,\,0,\,1\big)$ with $\epsilon \sim \mathcal{U}(-0.35, 0.35)$ drawn separately for arrival and size.
+
+\section{Objective}
+
+\subsection*{The scheduling problem}
+
+A schedule assigns each job a start time $s_j \ge a_j$. Once started, the job runs without interruption (no preemption) and finishes at
+\[
+  c_j = s_j + p_j .
+\]
+Its \textbf{wait time} is $w_j = s_j - a_j$ and its \textbf{completion (flow) time} is $F_j = c_j - a_j = w_j + p_j$.
+
+A schedule is \textbf{feasible} if the machine is never over capacity. Writing $\mathcal{A}(\tau) = \{ j : s_j \le \tau < c_j \}$ for the jobs running at tick $\tau$,
+\[
+  \sum_{j \in \mathcal{A}(\tau)} d_j \;\le\; \Cap
+  \qquad \text{for every tick } \tau \text{ and every resource } r = 1,\dots,\R .
+\]
+Because every job uses the same value on all resources and ticks, this is a single knapsack-style constraint: the demands of the jobs running together must sum to at most $255$.
+
+The objective is to minimise the average completion time:
+\[
+  \min_{s}\ \frac{1}{\N}\sum_{j=1}^{\N} F_j
+  \;=\; \min_{s}\ \frac{1}{\N}\sum_{j=1}^{\N} \big(w_j + p_j\big).
+\]
+The sizes $p_j$ and arrivals $a_j$ are fixed by the instance, so this is the same as minimising total wait time $\sum_j w_j$, or total completion time $\sum_j c_j$. With one resource used at full demand this reduces to the classic problem $1 \mid r_j \mid \sum C_j$. With random demands it also contains a packing decision, which is why E2 is harder than E1.
+
+\subsection*{What the agent is trained to do}
+
+The agent learns a policy $\pi_\theta(a \mid o)$ that maximises the expected discounted return
+\[
+  J(\theta) \;=\; \mathbb{E}_{\pi_\theta}\!\Big[\sum_{t} \gamma^{t} r_t\Big],
+  \qquad \gamma = 0.995 ,
+\]
+using PPO. The reward is built so that maximising $J$ also pushes the average completion time down (Section~\ref{sec:reward}). Results are reported as the \textbf{margin against SJF}, $(\bar r_{\text{PPO}} - \bar r_{\text{SJF}})/|\bar r_{\text{SJF}}|$ on mean reward, together with the mean wait and completion times, over $5000$ evaluation episodes with a fixed seed per episode.
+
+\section{Action space}
+
+The action space is discrete with $1 + M\N$ actions, where $M$ is the number of machines. With $M=1$ and $\N=10$ it has $11$ actions:
+\[
+  \mathcal{A} = \{0, 1, \dots, 10\}.
+\]
+
+\begin{center}
+\begin{tabular}{@{}cp{9.5cm}@{}}
+\toprule
+Action $a$ & Meaning \\
+\midrule
+$0$ & \textbf{Skip}: advance simulated time by one tick. \\
+$a \ge 1$ & \textbf{Start a job}: machine $m=\lfloor (a-1)/\N \rfloor$, job $j=(a-1) \bmod \N$. With one machine, action $a$ starts job $a-1$. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{When a start action succeeds.} Starting job $j$ succeeds only if job $j$ is \code{PENDING} (it has arrived and has not started) and adding its usage keeps every cell of the machine's usage array within capacity. Otherwise the action fails. Starting a job does not move time forward, so several jobs can be started in the same tick. Only a skip, or the automatic skip after a failed start, advances time.
+
+\paragraph{Failed starts.} Choosing a job that is not pending, or one that does not fit, is an invalid action. The wrapper then burns one tick (it applies a skip) and adds a penalty, so a bad policy cannot retry the same invalid action forever.
+
+\section{Observation space}
+
+The observation is a dictionary. Below, $M$ is the number of machines, $\N$ the number of jobs, $\R$ the number of resources, and $\Tw$ the window length; here $M=1$, $\N=10$, $\R=3$, $\Tw=10$.
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{6.4cm}@{}}
+\toprule
+Key & Shape and range & Meaning \\
+\midrule
+\code{machines\_usage} & $(M,\R,\Tw)$, integers in $[0,255]$ & Resource already in use on each machine at each of the next $\Tw$ ticks. The window shifts one tick to the left on every time step. \\
+\code{machines\_capacity} & $(M,\R,\Tw)$, integers in $[0,255]$ & Machine capacity, $255$ in every cell. \\
+\code{jobs\_usage} & $(\N,\R,\Tw)$, integers in $[0,256]$ & Each job's usage array: its demand $d_j$ for the first $p_j$ ticks, then $0$. \\
+\code{status} & $(\N)$, integers & Job state: $0$ \code{NOT\_CREATED}, $1$ \code{PENDING}, $2$ \code{RUNNING}, $3$ \code{COMPLETED}. \\
+\code{size} & $(\N)$, float, $\ge 0$ & Run length $p_j$ in ticks. \\
+\code{ttl} & $(\N)$, float, $\ge 0$ & Ticks left to run. Equals $p_j$ until the job starts, then counts down. \\
+\code{arrival} & $(\N)$, float, $\ge 0$ & Arrival tick $a_j$. Visible from step $0$ for jobs that have not yet arrived. \\
+\code{wait\_time} & $(\N)$, float, $\ge 0$ & Ticks the job has spent \code{PENDING}. \\
+\code{scheduled\_at} & $(\N)$, float, $\ge 0$ & Tick at which the job started. \\
+\code{finished\_at} & $(\N)$, float, $\ge 0$ & Tick at which the job finished. \\
+\code{time} & $(1)$, float, $\ge 0$ & Current simulated tick $t$. \\
+\code{action\_success} & $\{0,1\}$ & Whether the last start action succeeded. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Notes:
+\begin{itemize}[noitemsep]
+  \item A job moves $\code{NOT\_CREATED} \to \code{PENDING}$ when $t = a_j$, $\code{PENDING} \to \code{RUNNING}$ when started, and $\code{RUNNING} \to \code{COMPLETED}$ after $p_j$ ticks.
+  \item \code{scheduled\_at} and \code{finished\_at} are $0$ until the event happens, so they cannot by themselves tell whether it has happened; \code{status} does.
+  \item The environment is \emph{deterministic given the instance}: all randomness is in the job set drawn at reset. The agent sees the whole instance, including future arrivals, from step $0$, so the problem is effectively offline even though decisions are made one step at a time.
+\end{itemize}
+
+\section{Reward}
+\label{sec:reward}
+
+Let $\mathcal{I}_t = \{ j : \code{status}_j \in \{\code{PENDING}, \code{RUNNING}\}\}$ be the set of \emph{active} jobs after step $t$, and $n_t = |\mathcal{I}_t|$. The reward is applied by a wrapper around the environment. Each step $t$ gives:
+
+\begin{center}
+\begin{tabular}{@{}p{5.3cm}p{8cm}@{}}
+\toprule
+Event & Reward $r_t$ \\
+\midrule
+Skip & $-\,n_t$ \\
+Successful start & $+1$ \\
+Failed start (the wrapper applies one skip) & $-10 - n_t$ \\
+All jobs completed & $+100$ and the episode ends \\
+Step limit reached ($t \ge 110$) & $-100$ and the episode ends \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The two terminal rows override the others on the step where they happen. The step counter counts every step, including starts.
+
+\paragraph{Why this reward matches the objective.} Time only advances through skips, and each skip charges one unit per active job. A job is active from its arrival until it completes, so over a whole episode the skip penalties add up to
+\[
+  \sum_{\text{skips } t} n_t \;=\; \sum_{j=1}^{\N} \big(c_j - a_j\big) \;=\; \sum_{j=1}^{\N} F_j ,
+\]
+the total completion time, up to a boundary term of at most one unit per job. Minimising total completion time and maximising the sum of skip rewards are therefore the same goal. The remaining terms shape behaviour:
+\begin{itemize}[noitemsep]
+  \item the $+1$ for a successful start rewards making progress and never changes which schedule is best, because every job is started exactly once;
+  \item the $-10$ for a failed start makes invalid actions clearly worse than waiting;
+  \item the $+100$ and $-100$ terminal values reward finishing every job and punish running out of steps.
+\end{itemize}
+
+\paragraph{Episode and evaluation.} An episode ends when all jobs are \code{COMPLETED}, or after $110$ steps. The agent is trained for $2\cdot 10^{6}$ steps. For evaluation, episode $e$ uses seed $42+e$, so every method (PPO, SJF, the exact solver) is scored on the same $5000$ job sets.
+
+\section{Baselines}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{SJF (shortest job first):} always starts the shortest pending job that fits; skips when nothing fits.
+  \item \textbf{Exact optimal:} a search over the capacity-feasible subsets of pending jobs at every arrival and completion, replayed through the real environment so its reward is directly comparable.
+\end{itemize}
+
+\end{document}

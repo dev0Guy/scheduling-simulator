@@ -3,6 +3,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CallbackList, EvalCallback
 import wandb
+import os
 import typing as tp
 import numpy as np
 from stable_baselines3.common.monitor import Monitor
@@ -34,6 +35,18 @@ def _unbatch(obs: dict) -> dict:
     }
 
 
+def _linear_schedule(initial_lr: float, floor: float = 0.05):
+    """Linear decay of the learning rate to `floor * initial_lr`.
+
+    Closes over plain floats only (NOT the runner), because SB3 pickles the
+    schedule inside model.save().
+    """
+    def schedule(progress_remaining: float) -> float:
+        return initial_lr * max(progress_remaining, floor)
+
+    return schedule
+
+
 def get_auto_device() -> str:
     import torch as th
     """Pick the best available device: cuda > cpu.
@@ -60,7 +73,21 @@ class ExperimentRunner:
         max_time: int = 250,
         run_with_wandb: bool = True,
         eval_every_steps: int = 10_000,
+        n_envs: int = 4,
+        n_steps: int = 2048,
+        learning_rate: float = 7e-6,
+        lr_decay: bool = True,
+        target_kl: float | None = 0.03,
+        n_eval_episodes: int = 50,
+        use_best_model: bool = True,
     ) -> None:
+        self.learning_rate = learning_rate
+        self.lr_decay = lr_decay          # linear decay to 5% of learning_rate
+        self.target_kl = target_kl        # stop an epoch early when a policy update is too large
+        self.n_eval_episodes = n_eval_episodes
+        self.use_best_model = use_best_model  # final evaluation uses best_model.zip
+        self.n_envs = n_envs
+        self.n_steps = n_steps  # per env; PPO batch per update = n_envs * n_steps
         self.eval_every_steps = eval_every_steps
         self.config = config
         self.run_with_wandb = run_with_wandb
@@ -82,7 +109,7 @@ class ExperimentRunner:
         self.run_id = "defualt" if not self.run_with_wandb else self._run.id
 
     def run(self) -> None:
-        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False)
+        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs)
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
@@ -97,14 +124,25 @@ class ExperimentRunner:
             # "MultiInputPolicy",
             NewSchedulingPolicy,
             env,
-            learning_rate=1e-5,
-            n_steps=2048,
+            learning_rate=(
+                _linear_schedule(self.learning_rate)
+                if self.lr_decay
+                else self.learning_rate
+            ),
+            target_kl=self.target_kl,
+            n_steps=self.n_steps,
             batch_size=64,
             n_epochs=5,
-            gamma=0.99,
-            gae_lambda=0.95,
+            # gamma=0.999/gae_lambda=0.99 was tried and measured as a
+            # mild regression (run r23681yd, see docs/experiment_log.md)
+            # vs 0.995/0.995. gamma=1.0 (undiscounted) was tried next, on
+            # top of the no-arrival ablation, and was a much larger
+            # regression (run r84hnw8u, see docs/experiment_log.md #17).
+            # Reverted back to the validated-best 0.995/0.995 here.
+            gamma=0.995,
+            gae_lambda=0.995,
             clip_range=0.2,
-            ent_coef=0.01,
+            ent_coef=0.03,
             vf_coef=0.5,
             max_grad_norm=0.5,
             verbose=1,
@@ -119,9 +157,9 @@ class ExperimentRunner:
             best_model_save_path=f"models/{self.run_id}",
             log_path=f"models/{self.run_id}",
             eval_freq=self.eval_every_steps,
-            n_eval_episodes=10,
+            n_eval_episodes=self.n_eval_episodes,
         ))
-        callbacks.append(EntCoefScheduler(start=0.02, end=0.002, total_timesteps=self.train_steps))
+        callbacks.append(EntCoefScheduler(start=0.05, end=0.01, total_timesteps=self.train_steps))
         if self.run_with_wandb:
             callbacks.append(WandbCallback(
                 gradient_save_freq=50_000,
@@ -136,9 +174,17 @@ class ExperimentRunner:
         if self.run_with_wandb:
             wandb.save(model_path)
         eval_env.close()
+
+        # The last model can be much worse than the best one seen during
+        # training (policy collapse late in training), so evaluate the best
+        # checkpoint saved by EvalCallback when available.
+        best_path = f"models/{self.run_id}/best_model.zip"
+        if self.use_best_model and os.path.exists(best_path):
+            print(f"Final evaluation uses best checkpoint: {best_path}")
+            model = PPO.load(best_path, device=get_auto_device())
         return model
 
-    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 1) -> None:
+    def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 100) -> None:
         print("Evaluation")
         n_jobs = self.config['n_jobs']
 
@@ -159,7 +205,7 @@ class ExperimentRunner:
 
             while not done:
                 steps += 1
-                action, _states = model.predict(obs, deterministic=False)
+                action, _states = model.predict(obs, deterministic=True)
                 obs, reward, done_arr, infos = envs.step(action)
                 done = bool(done_arr[0])
                 total_reward += float(reward[0])

@@ -20,16 +20,30 @@ config: "ClusterGenerationConfig" = {
 
 runner = ExperimentRunner(
     config,
-    train_steps=750_000,
-    evalution_steps=100,
+    train_steps=2_000_000,
+    evalution_steps=5000,
     policy_kwargs={
-        "embedding_dim": 128,
+        "embedding_dim": 256,
         "n_machines": config["n_machines"],
-        "max_time": 100.0,
+        "max_time": 110.0,
+        # M9 input with one value PER RESOURCE (max over time) for each
+        # job and machine, instead of one scalar. False = original M9.
+        "per_resource_fit": True,
+        # Actor extras: per-(machine, job) pair numbers (fits now, delay until
+        # it fits, headroom, ...) and a state-dependent machine embedding.
+        "pair_features": True,
+        "dynamic_machine": True,
+        # "attention_hidden_dim":64
     },
-    max_time=100,
+    max_time=110,
     run_with_wandb=True,
     eval_every_steps=50_000,
+    n_envs=8,
+    n_steps=512,
+    learning_rate=2e-5,
+    lr_decay=True,
+    target_kl=0.03,
+    n_eval_episodes=50,
 )
 
 runner.run()

@@ -22,20 +22,25 @@ class SchedulingMlpExtractor(nn.Module):
     def __init__(
         self,
         n_jobs: int,
+        n_machines: int,
         embedding_dim: int,
+        features_dim: int = None,
     ):
         super().__init__()
 
         self.n_jobs = n_jobs
+        self.n_machines = n_machines
         self.embedding_dim = embedding_dim
 
-        # Actor receives:
+        # Actor receives the whole feature vector:
         #
-        # global
-        # + n_jobs * job_embedding
+        # global + n_jobs * job_embedding
+        # (+ pair features, + dynamic machine embedding when enabled)
         #
         self.latent_dim_pi = (
-            embedding_dim * (n_jobs + 1)
+            features_dim
+            if features_dim is not None
+            else embedding_dim * (n_jobs + 1)
         )
 
         # Critic receives global only
@@ -77,6 +82,12 @@ class SchedulingActionHead(nn.Module):
     """
     Produces one logit for every action.
 
+    Reconstructed to be exactly the `g231w4jg` architecture (see
+    experiment log #22): machines are represented by a static identity
+    embedding (`nn.Embedding(n_machines, embedding_dim)`), not a
+    dynamic, state-dependent embedding -- the dual-attention machine
+    encoder/cross-attention from later experiments is removed here.
+
     Action ordering:
 
         0
@@ -99,7 +110,7 @@ class SchedulingActionHead(nn.Module):
 
         global state
         +
-        machine embedding
+        machine embedding (static identity)
         +
         job embedding
     """
@@ -109,12 +120,24 @@ class SchedulingActionHead(nn.Module):
         n_jobs: int,
         n_machines: int,
         embedding_dim: int,
+        pair_feat_dim: int = 0,
+        dynamic_machine: bool = False,
     ):
         super().__init__()
 
         self.n_jobs = n_jobs
         self.n_machines = n_machines
         self.embedding_dim = embedding_dim
+        self.pair_feat_dim = pair_feat_dim
+        self.dynamic_machine = dynamic_machine
+
+        # per-pair numbers (fits now, delay, headroom, ...) -> 64 dims
+        self.pair_proj_dim = 64 if pair_feat_dim > 0 else 0
+        if pair_feat_dim > 0:
+            self.pair_proj = nn.Sequential(
+                nn.Linear(pair_feat_dim, self.pair_proj_dim),
+                nn.ReLU(),
+            )
 
         # ---------------------------------------------------------
         # Machine identity embedding
@@ -139,7 +162,7 @@ class SchedulingActionHead(nn.Module):
 
         self.score_net = nn.Sequential(
             nn.Linear(
-                embedding_dim * 3,
+                embedding_dim * 3 + self.pair_proj_dim,
                 128,
             ),
             nn.ReLU(),
@@ -203,7 +226,8 @@ class SchedulingActionHead(nn.Module):
 
         job_embeddings = features[
             :,
-            self.embedding_dim:,
+            self.embedding_dim:
+            self.embedding_dim * (1 + self.n_jobs),
         ]
 
         job_embeddings = job_embeddings.reshape(
@@ -223,11 +247,35 @@ class SchedulingActionHead(nn.Module):
             device=features.device,
         )
 
+        # (batch, n_machines, embedding_dim): static identity, plus the
+        # state-dependent part when dynamic_machine is on.
         machine_embeddings = (
             self.machine_embedding(
                 machine_ids
             )
+            .unsqueeze(0)
+            .expand(batch_size, -1, -1)
         )
+
+        offset = self.embedding_dim * (1 + self.n_jobs)
+
+        pair_extra = None
+        if self.pair_feat_dim > 0:
+            n_pair = self.n_machines * self.n_jobs * self.pair_feat_dim
+            pair_extra = features[:, offset:offset + n_pair].reshape(
+                batch_size,
+                self.n_machines,
+                self.n_jobs,
+                self.pair_feat_dim,
+            )
+            offset += n_pair
+
+        if self.dynamic_machine:
+            n_dyn = self.n_machines * self.embedding_dim
+            machine_embeddings = machine_embeddings + features[
+                :, offset:offset + n_dyn
+            ].reshape(batch_size, self.n_machines, self.embedding_dim)
+            offset += n_dyn
 
         # ---------------------------------------------------------
         # Expand global
@@ -268,7 +316,6 @@ class SchedulingActionHead(nn.Module):
 
         machine_expanded = (
             machine_embeddings
-            .unsqueeze(0)
             .unsqueeze(2)
             .expand(
                 batch_size,
@@ -284,12 +331,16 @@ class SchedulingActionHead(nn.Module):
         # [global, machine, job]
         # ---------------------------------------------------------
 
+        pair_parts = [
+            global_expanded,
+            machine_expanded,
+            job_expanded,
+        ]
+        if pair_extra is not None:
+            pair_parts.append(self.pair_proj(pair_extra))
+
         pair_features = th.cat(
-            [
-                global_expanded,
-                machine_expanded,
-                job_expanded,
-            ],
+            pair_parts,
             dim=-1,
         )
 
@@ -300,7 +351,7 @@ class SchedulingActionHead(nn.Module):
         pair_features = pair_features.reshape(
             batch_size,
             self.n_machines * self.n_jobs,
-            self.embedding_dim * 3,
+            self.embedding_dim * 3 + self.pair_proj_dim,
         )
 
         # ---------------------------------------------------------
@@ -381,6 +432,9 @@ class NewSchedulingPolicy(ActorCriticPolicy):
         embedding_dim=128,
         max_time=250.0,
         n_machines=1,
+        per_resource_fit=False,
+        pair_features=False,
+        dynamic_machine=False,
         **kwargs,
     ):
 
@@ -400,6 +454,14 @@ class NewSchedulingPolicy(ActorCriticPolicy):
 
         self.scheduling_n_actions = (
             action_space.n
+        )
+
+        self.scheduling_pair_features = pair_features
+        self.scheduling_dynamic_machine = dynamic_machine
+        self.scheduling_pair_feat_dim = (
+            6 + int(observation_space["jobs_usage"].shape[1])
+            if pair_features
+            else 0
         )
 
         # ---------------------------------------------------------
@@ -447,6 +509,9 @@ class NewSchedulingPolicy(ActorCriticPolicy):
                 "embedding_dim": embedding_dim,
                 "attention_hidden_dim": 32,
                 "max_time": max_time,
+                "per_resource_fit": per_resource_fit,
+                "pair_features": pair_features,
+                "dynamic_machine": dynamic_machine,
             },
 
             **kwargs,
@@ -460,6 +525,8 @@ class NewSchedulingPolicy(ActorCriticPolicy):
             n_jobs=self.scheduling_n_jobs,
             n_machines=self.scheduling_n_machines,
             embedding_dim=embedding_dim,
+            pair_feat_dim=self.scheduling_pair_feat_dim,
+            dynamic_machine=self.scheduling_dynamic_machine,
         )
 
         # ---------------------------------------------------------
@@ -488,5 +555,7 @@ class NewSchedulingPolicy(ActorCriticPolicy):
 
         self.mlp_extractor = SchedulingMlpExtractor(
             n_jobs=self.scheduling_n_jobs,
+            n_machines=self.scheduling_n_machines,
             embedding_dim=self.scheduling_embedding_dim,
+            features_dim=self.features_dim,
         )

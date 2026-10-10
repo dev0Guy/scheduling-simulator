@@ -1,0 +1,212 @@
+<title>Multiplicative Fit Network</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one centered column; a single tall diagram in a scroll wrapper, notes below */
+  :root {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --surface-2: #efeee8;
+    --border: #ddd9d0;
+    --text: #1b1e23;
+    --text-dim: #656b74;
+    --text-faint: #8a8d90;
+    --job: #b06e0d;
+    --machine: #1c7999;
+    --scalar: #1a7a52;
+    --out: #7c4cc4;
+    --new: #1a7a52;
+    --new-fill: #d7f0e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --surface: #191d24; --surface-2: #1f242c; --border: #2a3038;
+      --text: #e6e9ec; --text-dim: #9aa1ab; --text-faint: #6c727c;
+      --job: #f2a93c; --machine: #5fb3d9; --scalar: #4fd39a; --out: #c79bf5;
+      --new: #4fd39a; --new-fill: #1d3f31;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #191d24; --surface-2: #1f242c; --border: #2a3038;
+    --text: #e6e9ec; --text-dim: #9aa1ab; --text-faint: #6c727c;
+    --job: #f2a93c; --machine: #5fb3d9; --scalar: #4fd39a; --out: #c79bf5;
+    --new: #4fd39a; --new-fill: #1d3f31;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    padding: 44px 20px 72px; display: flex; justify-content: center;
+  }
+  .page { width: 100%; max-width: 940px; display: flex; flex-direction: column; gap: 28px; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--scalar); }
+  h1 { font-family: "Fraunces", Georgia, serif; font-size: 32px; font-weight: 600; margin: 8px 0 0; line-height: 1.18; text-wrap: balance; }
+  h2 { font-family: "Fraunces", Georgia, serif; font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+  p, li { font-size: 15px; line-height: 1.65; color: var(--text-dim); max-width: 68ch; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0; padding-left: 20px; }
+  b { color: var(--text); font-weight: 600; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.9em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 16px 14px; }
+  .scroll { overflow-x: auto; padding-bottom: 4px; }
+  figure { margin: 0; }
+  svg.diagram { display: block; width: 900px; max-width: none; height: auto; }
+  figcaption { font-size: 12.5px; color: var(--text-faint); margin-top: 12px; line-height: 1.55; max-width: 76ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .legend span { display: flex; align-items: center; gap: 7px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--text-dim); }
+  .sw { width: 20px; height: 3px; border-radius: 2px; display: inline-block; }
+</style>
+
+<div class="page">
+  <div>
+    <div class="eyebrow">Cluster scheduling simulator</div>
+    <h1>The multiplicative fit network</h1>
+    <p style="margin-top:10px;">
+      The job encoder works as in the baseline and never sees usage. After each job has its
+      256-number summary, a fit attention step compares the job's usage with the machine's free
+      room. Then every job looks at every other job, and the summaries are pooled and scored.
+    </p>
+  </div>
+
+  <div class="card">
+    <figure>
+      <div class="scroll">
+      <svg class="diagram" viewBox="0 0 900 1170" role="img"
+           aria-label="Flow diagram: jobs are encoded without usage into 256-number summaries. A fit attention step takes each job's usage and each machine's room, produces a 64-number fit vector per job, which multiplies the job summary channel by channel. A job self-attention step then lets every job attend to every other job. The summaries are pooled into a global summary, then scored as before, with a skip score, and a softmax picks the action.">
+        <defs>
+          <marker id="aJ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--job)"/></marker>
+          <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--machine)"/></marker>
+          <marker id="aS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--scalar)"/></marker>
+          <marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+
+        <g font-family="IBM Plex Mono, monospace" text-anchor="middle" fill="var(--text)">
+
+          <text x="205" y="26" font-size="12" font-weight="600" fill="var(--job)">EACH JOB (x10)</text>
+          <text x="465" y="26" font-size="12" font-weight="600" fill="var(--scalar)">JOB USAGE</text>
+          <text x="720" y="26" font-size="12" font-weight="600" fill="var(--machine)">THE MACHINE</text>
+
+          <!-- job path -->
+          <rect x="40" y="40" width="330" height="80" rx="8" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="205" y="64" font-size="11">status: 16 learned numbers</text>
+          <text x="205" y="82" font-size="11">size, wait, time left,</text>
+          <text x="205" y="100" font-size="11">arrival (4 numbers)</text>
+          <line x1="205" y1="120" x2="205" y2="158" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <rect x="40" y="160" width="330" height="46" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="205" y="180" font-size="11.5">job encoder (shared)</text>
+          <text x="205" y="196" font-size="10.5" fill="var(--text-dim)">20 → 256 → 256</text>
+          <line x1="205" y1="206" x2="205" y2="244" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <rect x="40" y="246" width="330" height="40" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="205" y="271" font-size="11.5">job summaries (10 × 256)</text>
+          <line x1="205" y1="286" x2="205" y2="518" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <!-- job usage path -->
+          <rect x="390" y="40" width="150" height="70" rx="8" fill="var(--surface-2)" stroke="var(--scalar)" stroke-width="1.5"/>
+          <text x="465" y="68" font-size="11">job usage matrix</text>
+          <text x="465" y="88" font-size="10.5" fill="var(--text-dim)">(3 × 10 per job)</text>
+          <line x1="465" y1="110" x2="465" y2="158" stroke="var(--scalar)" stroke-width="1.5" marker-end="url(#aS)"/>
+          <rect x="390" y="160" width="150" height="46" rx="8" fill="var(--surface)" stroke="var(--scalar)" stroke-width="1.5"/>
+          <text x="465" y="180" font-size="11">job usage (1)</text>
+          <text x="465" y="196" font-size="10.5" fill="var(--text-dim)">max / 255</text>
+          <path d="M465 206 L465 300 L540 300 L540 328" fill="none" stroke="var(--scalar)" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#aS)"/>
+
+          <!-- machine path -->
+          <rect x="560" y="40" width="320" height="70" rx="8" fill="var(--surface-2)" stroke="var(--machine)" stroke-width="1.5"/>
+          <text x="720" y="68" font-size="11">machine capacity &amp; usage</text>
+          <text x="720" y="88" font-size="10.5" fill="var(--text-dim)">(3 resources × 10 ticks)</text>
+          <line x1="720" y1="110" x2="720" y2="158" stroke="var(--machine)" stroke-width="1.5" marker-end="url(#aM)"/>
+          <rect x="560" y="160" width="320" height="46" rx="8" fill="var(--surface)" stroke="var(--scalar)" stroke-width="1.5"/>
+          <text x="720" y="180" font-size="11">machine room (1)</text>
+          <text x="720" y="196" font-size="10.5" fill="var(--text-dim)">min(capacity − usage) / 255</text>
+          <line x1="720" y1="206" x2="720" y2="328" stroke="var(--scalar)" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#aS)"/>
+
+          <!-- NEW: fit attention block -->
+          <rect x="410" y="330" width="470" height="124" rx="10" fill="var(--new-fill)" stroke="var(--new)" stroke-width="2"/>
+          <text x="645" y="354" font-size="12" font-weight="600" fill="var(--new)">fit attention</text>
+          <text x="645" y="376" font-size="11">per job j and machine m:</text>
+          <text x="645" y="396" font-size="11">weight = sigmoid(Q(usage)·K(room)/√64)</text>
+          <text x="645" y="416" font-size="11">out = Σ over machines weight × V(room)</text>
+          <text x="645" y="438" font-size="10.5" fill="var(--text-dim)">(64 numbers per job)</text>
+
+          <!-- fuse -->
+          <path d="M645 454 L645 486 L400 486 L400 518" fill="none" stroke="var(--scalar)" stroke-width="1.8" marker-end="url(#aS)"/>
+          <rect x="100" y="520" width="400" height="56" rx="8" fill="var(--surface-2)" stroke="var(--scalar)" stroke-width="1.8"/>
+          <text x="300" y="544" font-size="11.5">multiply (per channel)</text>
+          <text x="300" y="562" font-size="10.5" fill="var(--text-dim)">summary × (1 + tanh(fit))</text>
+          <line x1="300" y1="576" x2="300" y2="614" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <rect x="100" y="616" width="400" height="44" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="300" y="643" font-size="11.5">job summaries with fit (10 × 256)</text>
+          <line x1="300" y1="660" x2="300" y2="698" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <!-- NEW: job self-attention -->
+          <rect x="60" y="700" width="480" height="84" rx="10" fill="var(--new-fill)" stroke="var(--new)" stroke-width="2"/>
+          <text x="300" y="724" font-size="12" font-weight="600" fill="var(--new)">NEW: job self-attention</text>
+          <text x="300" y="746" font-size="11">each job looks at every job (4 heads)</text>
+          <text x="300" y="764" font-size="11">finished jobs are masked out</text>
+          <text x="300" y="779" font-size="10" fill="var(--text-dim)">residual + normalize, still 10 × 256</text>
+          <line x1="300" y1="784" x2="300" y2="822" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <!-- pooling -->
+          <rect x="100" y="824" width="400" height="66" rx="8" fill="var(--surface-2)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="300" y="846" font-size="11.5">attention pooling (as before)</text>
+          <text x="300" y="863" font-size="10.5" fill="var(--text-dim)">score each job, softmax,</text>
+          <text x="300" y="879" font-size="10.5" fill="var(--text-dim)">weighted average</text>
+          <line x1="300" y1="890" x2="300" y2="928" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <rect x="100" y="930" width="400" height="40" rx="8" fill="var(--surface)" stroke="var(--job)" stroke-width="1.5"/>
+          <text x="300" y="955" font-size="11.5">global summary (256)</text>
+          <line x1="300" y1="970" x2="300" y2="1028" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <!-- the summaries after self-attention also go straight to the scorer -->
+          <path d="M540 742 L585 742 L585 1010 L520 1028" fill="none" stroke="var(--job)" stroke-width="1.5" marker-end="url(#aJ)"/>
+
+          <!-- as before -->
+          <rect x="100" y="1030" width="780" height="124" rx="10" fill="var(--surface-2)" stroke="var(--out)" stroke-width="1.6"/>
+          <text x="490" y="1054" font-size="12" font-weight="600" fill="var(--out)">THEN, AS BEFORE</text>
+          <text x="490" y="1076" font-size="11">scorer for each job: 768 → 128 → 128 → 1</text>
+          <text x="490" y="1093" font-size="10.5" fill="var(--text-dim)">inputs: global, machine vector, job summary after self-attention</text>
+          <text x="490" y="1115" font-size="11">skip score: global → 64 → 1</text>
+          <text x="490" y="1138" font-size="11.5" font-weight="600" fill="var(--out)">11 scores → softmax → action</text>
+        </g>
+      </svg>
+      </div>
+      <figcaption>
+        Green blocks are the added parts: the fit attention (from the previous model) and the new job
+        self-attention. Dashed green arrows are single plain numbers. The final job summaries also go
+        straight to the scorer, as before. A critic
+        (global summary → 256 → 256 → 1) is used during training only.
+      </figcaption>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--job)"></i>job data</span>
+        <span><i class="sw" style="background:var(--machine)"></i>machine data</span>
+        <span><i class="sw" style="background:var(--scalar)"></i>single numbers and the new step</span>
+        <span><i class="sw" style="background:var(--out)"></i>decision</span>
+      </div>
+    </figure>
+  </div>
+
+  <div>
+    <h2>How the fit attention works</h2>
+    <ul>
+      <li><b>Inputs are two plain numbers.</b> A job's usage is the largest cell in its usage matrix divided by 255 (0.25, 0.5 or 1.0). A machine's room is the smallest value of capacity minus usage over its whole window, divided by 255, which is how much space is left at its tightest moment.</li>
+      <li><b>Query, key, value.</b> Small networks turn the job's usage into a query and the machine's room into a key and a value, each 64 numbers.</li>
+      <li><b>A sigmoid, not a softmax.</b> With one machine a softmax is always 1, so every job would get the same answer. A sigmoid gives each job-machine pair its own weight between 0 and 1, which acts as "does this job fit here".</li>
+      <li><b>Output per job.</b> The weight times the machine's value, summed over machines. It is 64 numbers that depend on both this job's usage and the machine's room.</li>
+      <li><b>Folded back in by multiplication.</b> The 64 fit numbers are turned into 256 factors, one per channel of the job's summary. Each channel is multiplied by <code>1 + tanh(...)</code>, a number between 0 and 2, so a job's fit can turn parts of its summary down or up.</li>
+    </ul>
+  </div>
+
+  <div>
+    <h2>How the job self-attention works</h2>
+    <ul>
+      <li><b>Every job looks at every job.</b> Each summary asks the other 10 summaries which ones are relevant to it and takes a weighted mix of them (4 heads, each looking for something different).</li>
+      <li><b>Why it comes after the fit step.</b> By then each summary already includes how well that job fits the machine, so a job can compare itself with the other jobs on size, wait time and fit together, which is the comparison SJF makes.</li>
+      <li><b>Finished jobs are ignored as sources.</b> Their old numbers would only add noise to the other jobs. Each job still keeps its own status through its own summary.</li>
+      <li><b>Same shape out.</b> The result is added to the original summary and normalized, so the output is still 10 summaries of 256 numbers.</li>
+    </ul>
+  </div>
+</div>

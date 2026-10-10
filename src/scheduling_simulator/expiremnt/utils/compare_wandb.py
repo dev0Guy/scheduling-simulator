@@ -3,8 +3,8 @@ import wandb
 
 PROJECT = "dev0guy/cluster-scheduling-simulator"
 
-RUN_A = "u62q09kb"  # PPO
-RUN_B = "tejwpkmb"  # Random
+RUN_A = "ne5qv1d2"
+RUN_B = "rjzcixv2"  # SJF, 3-level usage task
 
 
 METRICS = {
@@ -29,11 +29,13 @@ def compare_metric(
     history_a = run_a.history(
         keys=[X_AXIS, metric],
         pandas=True,
+        samples=10_000,
     )
 
     history_b = run_b.history(
         keys=[X_AXIS, metric],
         pandas=True,
+        samples=10_000,
     )
 
     # ---------------------------------------------------------
