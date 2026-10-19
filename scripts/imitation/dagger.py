@@ -187,7 +187,9 @@ def main(base_path, init_path, out_prefix, n_iter, n_episodes, workers, epochs=4
     import torch as th
     import torch.nn.functional as F
     from pretrain_policy import build_policy, batch_obs, test_policy
+    import wandb_log as wl
 
+    run = wl.start(f"dagger-{N_MACHINES}M-3R", {"n_machines": N_MACHINES, "iterations": n_iter, "episodes_per_iteration": n_episodes, "epochs_per_iteration": epochs, "lr": lr, "batch": batch, "init": init_path, "base": base_path}, ["imitation", "dagger"])
     data = dict(np.load(base_path))
     model, _, device = build_policy()
     policy = model.policy
@@ -223,11 +225,17 @@ def main(base_path, init_path, out_prefix, n_iter, n_episodes, workers, epochs=4
                 th.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
                 opt.step(); tot += float(loss); k += 1
             print(f"  epoch {epoch + 1}/{epochs}: loss {tot / k:.4f}", flush=True)
+            wl.log(run, {"epoch": it * epochs + epoch + 1, "train/loss": tot / k})
         policy.set_training_mode(False)
         os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
         th.save(policy.state_dict(), f"{out_prefix}_it{it + 1}.pt")
-        test_policy(policy, n_episodes=300)
+        pol, sjf = test_policy(policy, n_episodes=300)
+        st = wl.summarize(pol, sjf)
+        wl.log(run, {"iteration": it + 1, "dagger/disagreement_pct": 100 * mism, "dagger/new_states": len(new["action"]),
+                     "dagger/total_states": N, "dagger/seconds": time.time() - t0, **{"dagger/test300_" + a: b for a, b in st.items()}})
+        wl.upload(run, f"{out_prefix}_it{it + 1}.pt", "model")
         print(f"iter {it + 1} done in {time.time() - t0:.0f}s", flush=True)
+    wl.finish(run)
 
 
 if __name__ == "__main__":

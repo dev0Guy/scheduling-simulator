@@ -11,6 +11,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dagger  # noqa: E402  (sets up sys.path for src/ and the solvers)
+import wandb_log as wl  # noqa: E402
 
 _n = dagger.CONFIG["n_jobs"]
 
@@ -54,3 +55,11 @@ if __name__ == "__main__":
     print(f"test on {n} job sets: policy {pol.mean():.2f}  SJF {sj.mean():.2f}  paired diff {d.mean():+.2f} "
           f"(95% CI ±{1.96 * d.std(ddof=1) / np.sqrt(n):.2f})", flush=True)
     np.savez(path, policy=pol, sjf=sj)
+    opt_path = os.environ.get("OPTIMAL_NPZ")
+    opt = np.load(opt_path)["reward"][:n] if opt_path and os.path.exists(opt_path) else None
+    run = wl.start(os.environ.get("WANDB_NAME", f"test-{os.path.basename(weights)}-{dagger.N_MACHINES}M-3R"),
+                   {"weights": weights, "n_machines": dagger.N_MACHINES, "episodes": n, "first_seed": start}, ["imitation", "test"])
+    wl.log_episodes(run, pol, sj, opt)
+    wl.upload(run, path, "result")
+    wl.upload(run, weights, "model")
+    wl.finish(run)

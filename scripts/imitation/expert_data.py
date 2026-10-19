@@ -12,6 +12,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dagger  # noqa: E402
+import wandb_log as wl  # noqa: E402
 
 
 def main(mode, n, workers, path):
@@ -31,6 +32,12 @@ def main(mode, n, workers, path):
     ep = np.array([r["episode_return"] for r in res])
     if mode == "eval":
         np.savez(path, episode=np.arange(n), reward=ep)
+        run = wl.start(f"optimal-{dagger.N_MACHINES}M-3R", {"n_machines": dagger.N_MACHINES, "episodes": n, "first_seed": start}, ["optimal", "exact-solver"])
+        wl.log_episodes(run, ep)
+        if run is not None:
+            run.summary["policy_mean"] = float(ep.mean())
+        wl.upload(run, path, "result")
+        wl.finish(run)
         print(f"optimal on {n} job sets (seeds {start}..): mean reward {ep.mean():.4f}")
         return
     data = {}

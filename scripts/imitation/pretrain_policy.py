@@ -20,6 +20,7 @@ from stable_baselines3 import PPO
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "src"))
 
+import wandb_log as wl
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
 from scheduling_simulator.expiremnt.policy.new_sched import NewSchedulingPolicy
@@ -86,6 +87,7 @@ def main(path, out_path, epochs=12, batch=512, lr=3e-4):
     # hold out the last 5% of the episodes' samples for a validation accuracy
     n_val = N // 20
     train_idx, val_idx = np.arange(N - n_val), np.arange(N - n_val, N)
+    run = wl.start(f"bc-pretrain-{N_MACHINES}M-3R", {"n_machines": N_MACHINES, "samples": N, "epochs": epochs, "batch": batch, "lr": lr, "dataset": path}, ["imitation", "behaviour-cloning"])
     model, env, device = build_policy()
     policy = model.policy
     opt = th.optim.Adam(policy.parameters(), lr=lr)
@@ -126,10 +128,16 @@ def main(path, out_path, epochs=12, batch=512, lr=3e-4):
             opt.step(); tot += float(loss); k += 1
         acc, vl, start_acc = evaluate(val_idx)
         print(f"epoch {epoch + 1}/{epochs}: train loss {tot / k:.4f}  validation accuracy {acc * 100:.2f}% (start actions only: {start_acc * 100:.2f}%)  critic MSE {vl:.4f}  ({time.time() - t0:.0f}s)", flush=True)
+        wl.log(run, {"epoch": epoch + 1, "train/loss": tot / k, "train/val_accuracy": acc, "train/val_start_accuracy": start_acc, "train/critic_mse": vl, "train/epoch_seconds": time.time() - t0})
         os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
         th.save(policy.state_dict(), out_path)
     policy.set_training_mode(False)
-    test_policy(policy)
+    pol, sjf = test_policy(policy)
+    if run is not None:
+        for k, v in wl.summarize(pol, sjf).items():
+            run.summary["test300_" + k] = v
+    wl.upload(run, out_path, "model")
+    wl.finish(run)
 
 
 if __name__ == "__main__":
