@@ -1,4 +1,5 @@
 import logging
+import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CallbackList, EvalCallback
@@ -80,12 +81,22 @@ class ExperimentRunner:
         target_kl: float | None = 0.03,
         n_eval_episodes: int = 50,
         use_best_model: bool = True,
+        ent_coef_start: float = 0.05,
+        ent_coef_end: float = 0.01,
+        policy_class=None,
+        sjf_relative_reward: bool = False,
+        init_policy_path: str | None = None,
     ) -> None:
         self.learning_rate = learning_rate
         self.lr_decay = lr_decay          # linear decay to 5% of learning_rate
         self.target_kl = target_kl        # stop an epoch early when a policy update is too large
         self.n_eval_episodes = n_eval_episodes
         self.use_best_model = use_best_model  # final evaluation uses best_model.zip
+        self.ent_coef_start = ent_coef_start  # entropy bonus is annealed linearly from start to end
+        self.ent_coef_end = ent_coef_end
+        self.policy_class = policy_class or NewSchedulingPolicy  # e.g. NoAttentionSchedulingPolicy
+        self.sjf_relative_reward = sjf_relative_reward  # shaped reward on the TRAINING env only
+        self.init_policy_path = init_policy_path  # policy weights to start PPO from (e.g. imitation pretraining)
         self.n_envs = n_envs
         self.n_steps = n_steps  # per env; PPO batch per update = n_envs * n_steps
         self.eval_every_steps = eval_every_steps
@@ -109,7 +120,7 @@ class ExperimentRunner:
         self.run_id = "defualt" if not self.run_with_wandb else self._run.id
 
     def run(self) -> None:
-        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs)
+        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs, sjf_relative=self.sjf_relative_reward)
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
@@ -122,7 +133,7 @@ class ExperimentRunner:
     def _train(self, env) -> BaseAlgorithm:
         model = PPO(
             # "MultiInputPolicy",
-            NewSchedulingPolicy,
+            self.policy_class,
             env,
             learning_rate=(
                 _linear_schedule(self.learning_rate)
@@ -150,6 +161,9 @@ class ExperimentRunner:
             policy_kwargs=self.policy_kwargs,
             device=get_auto_device(),
         )
+        if self.init_policy_path:
+            model.policy.load_state_dict(th.load(self.init_policy_path, map_location=model.device))
+            print(f"PPO starts from the pretrained policy: {self.init_policy_path}")
         callbacks = []
         eval_env = self.generate_enviroemnt(f"videos/{self.run_id}/eval", with_video=False)
         callbacks.append(EvalCallback(
@@ -159,7 +173,7 @@ class ExperimentRunner:
             eval_freq=self.eval_every_steps,
             n_eval_episodes=self.n_eval_episodes,
         ))
-        callbacks.append(EntCoefScheduler(start=0.05, end=0.01, total_timesteps=self.train_steps))
+        callbacks.append(EntCoefScheduler(start=self.ent_coef_start, end=self.ent_coef_end, total_timesteps=self.train_steps))
         if self.run_with_wandb:
             callbacks.append(WandbCallback(
                 gradient_save_freq=50_000,
@@ -272,11 +286,12 @@ class ExperimentRunner:
 
 
 
-    def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4):
+    def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4, sjf_relative: bool = False):
         return generate_scheduling_env(
             config=self.config,
             max_time=self.max_time,
             path=path,
             with_video=with_video,
             n_env=n_env,
+            sjf_relative=sjf_relative,
         )

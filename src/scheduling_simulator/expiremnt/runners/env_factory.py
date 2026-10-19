@@ -5,6 +5,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
+from scheduling_simulator.envioremnt.wrappers.sjf_relative_reward_wrapper import SJFRelativeRewardWrapper
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -16,6 +17,8 @@ def generate_scheduling_env(
     path: str,
     with_video: bool = False,
     n_env: int = 4,
+    sjf_relative: bool = False,
+    gamma: float = 0.995,
 ):
     """Single source of truth for building the eval/train environment stack.
 
@@ -29,6 +32,9 @@ def generate_scheduling_env(
     def make_env():
         _env = SchedulingEnviorment(config, render_mode=render_mode)
         _env = FailureSkipTimeWrapper(_env, max_time=max_time)
+        if sjf_relative:
+            # training only: reward = r + gamma*V_SJF(s') - V_SJF(s) (see the wrapper)
+            _env = SJFRelativeRewardWrapper(_env, gamma=gamma, max_time=max_time)
         return Monitor(_env)
 
     envs = DummyVecEnv([make_env for _ in range(n_env)])

@@ -87,7 +87,7 @@ def run_episode(args):
     )
 
 
-def main(n_episodes=5000, seed=42, workers=6):
+def main(n_episodes=5000, seed=42, workers=6, out_path="/tmp/opt_newenv.npz"):
     with Pool(workers) as pool:
         results = []
         for i, r in enumerate(pool.imap(run_episode, [(ep, seed) for ep in range(n_episodes)], chunksize=5)):
@@ -96,7 +96,7 @@ def main(n_episodes=5000, seed=42, workers=6):
                 print(f"...{i + 1}/{n_episodes}", flush=True)
 
     eps, rew, wait, comp, failed, mismatch = (np.array(x) for x in zip(*results))
-    np.savez("/tmp/opt_newenv.npz", episode=eps, reward=rew, wait=wait, completion=comp, failed=failed)
+    np.savez(out_path, episode=eps, reward=rew, wait=wait, completion=comp, failed=failed)
     print(f"\nEpisodes: {n_episodes}")
     print(f"Mean reward:              {rew.mean():.4f}")
     print(f"Mean avg_wait_time:       {wait.mean():.4f}")
@@ -108,4 +108,5 @@ def main(n_episodes=5000, seed=42, workers=6):
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
     w = int(sys.argv[2]) if len(sys.argv) > 2 else 6
-    main(n_episodes=n, workers=w)
+    out = sys.argv[3] if len(sys.argv) > 3 else "/tmp/opt_newenv.npz"
+    main(n_episodes=n, workers=w, out_path=out)

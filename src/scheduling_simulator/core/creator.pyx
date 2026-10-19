@@ -88,14 +88,12 @@ cdef deeprm_generate_single_job_decreasing_size(ClusterGenerationConfig config, 
     size = size + random.integers(-5, 6)  # +/- 5 jitter
     size = max(1, min(config.n_time, size))
 
-    # Per-resource usage: every resource except the last one gets its own
-    # value, drawn independently from the three levels, so two resources
-    # can be equal or different. The last resource is never used (always
-    # 0), so only the first n_resource - 1 resources limit what fits.
+    # Per-resource usage: every resource gets its own value, drawn
+    # independently from the same three levels, so any resources of a job
+    # can be equal or different.
     possible_options = [64, 128, 255]
-    for resource_idx in range(config.n_resource - 1):
+    for resource_idx in range(config.n_resource):
         usage[resource_idx, :size] = random.choice(possible_options)
-    # usage[config.n_resource - 1, :] stays 0
 
 
 

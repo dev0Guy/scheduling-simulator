@@ -29,7 +29,7 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
     @staticmethod
     def _skip_time_reward(observation: 'ObservationDict') -> float:
         return sum(
-            -1.0 / max(float(observation['size'][idx]), 1e-6)
+            -10.0 / max(float(observation['size'][idx]), 1e-6)
             for idx, status in enumerate(observation['status'])
             if status in (JobStatus.PENDING, JobStatus.RUNNING)
         )
