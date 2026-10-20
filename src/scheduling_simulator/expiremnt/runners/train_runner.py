@@ -86,6 +86,12 @@ class ExperimentRunner:
         policy_class=None,
         sjf_relative_reward: bool = False,
         init_policy_path: str | None = None,
+        batch_size: int = 64,
+        n_epochs: int = 5,
+        gamma: float = 0.995,
+        gae_lambda: float = 0.995,
+        clip_range: float = 0.2,
+        ent_hold_fraction: float = 0.0,
     ) -> None:
         self.learning_rate = learning_rate
         self.lr_decay = lr_decay          # linear decay to 5% of learning_rate
@@ -97,6 +103,9 @@ class ExperimentRunner:
         self.policy_class = policy_class or NewSchedulingPolicy  # e.g. NoAttentionSchedulingPolicy
         self.sjf_relative_reward = sjf_relative_reward  # shaped reward on the TRAINING env only
         self.init_policy_path = init_policy_path  # policy weights to start PPO from (e.g. imitation pretraining)
+        self.batch_size, self.n_epochs = batch_size, n_epochs
+        self.gamma, self.gae_lambda, self.clip_range = gamma, gae_lambda, clip_range
+        self.ent_hold_fraction = ent_hold_fraction  # entropy bonus stays at its start value for this share of training
         self.n_envs = n_envs
         self.n_steps = n_steps  # per env; PPO batch per update = n_envs * n_steps
         self.eval_every_steps = eval_every_steps
@@ -142,17 +151,17 @@ class ExperimentRunner:
             ),
             target_kl=self.target_kl,
             n_steps=self.n_steps,
-            batch_size=64,
-            n_epochs=5,
+            batch_size=self.batch_size,
+            n_epochs=self.n_epochs,
             # gamma=0.999/gae_lambda=0.99 was tried and measured as a
             # mild regression (run r23681yd, see docs/experiment_log.md)
             # vs 0.995/0.995. gamma=1.0 (undiscounted) was tried next, on
             # top of the no-arrival ablation, and was a much larger
             # regression (run r84hnw8u, see docs/experiment_log.md #17).
             # Reverted back to the validated-best 0.995/0.995 here.
-            gamma=0.995,
-            gae_lambda=0.995,
-            clip_range=0.2,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            clip_range=self.clip_range,
             ent_coef=0.03,
             vf_coef=0.5,
             max_grad_norm=0.5,
@@ -173,7 +182,7 @@ class ExperimentRunner:
             eval_freq=self.eval_every_steps,
             n_eval_episodes=self.n_eval_episodes,
         ))
-        callbacks.append(EntCoefScheduler(start=self.ent_coef_start, end=self.ent_coef_end, total_timesteps=self.train_steps))
+        callbacks.append(EntCoefScheduler(start=self.ent_coef_start, end=self.ent_coef_end, total_timesteps=self.train_steps, hold_fraction=self.ent_hold_fraction))
         if self.run_with_wandb:
             callbacks.append(WandbCallback(
                 gradient_save_freq=50_000,
