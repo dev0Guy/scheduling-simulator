@@ -1,6 +1,9 @@
 import logging
 import torch as th
 from stable_baselines3 import PPO
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CallbackList, EvalCallback
 import wandb
@@ -80,7 +83,7 @@ class ExperimentRunner:
         lr_decay: bool = True,
         target_kl: float | None = 0.03,
         n_eval_episodes: int = 50,
-        use_best_model: bool = True,
+        use_best_model: bool = False,
         ent_coef_start: float = 0.05,
         ent_coef_end: float = 0.01,
         policy_class=None,
@@ -92,12 +95,19 @@ class ExperimentRunner:
         gae_lambda: float = 0.995,
         clip_range: float = 0.2,
         ent_hold_fraction: float = 0.0,
+        maskable_ppo: bool = False,
+        seed: int | None = None,
+        reward_scale: float = 1.0,
+        drop_constant_rewards: bool = False,
     ) -> None:
         self.learning_rate = learning_rate
         self.lr_decay = lr_decay          # linear decay to 5% of learning_rate
         self.target_kl = target_kl        # stop an epoch early when a policy update is too large
         self.n_eval_episodes = n_eval_episodes
-        self.use_best_model = use_best_model  # final evaluation uses best_model.zip
+        # True: the final test uses best_model.zip, the checkpoint with the highest 50-episode check. That
+        # score is noisy (SE ~8 vs differences of 1-2), so the pick is mostly luck and often an early
+        # checkpoint; False (default) tests the model at the end of training.
+        self.use_best_model = use_best_model
         self.ent_coef_start = ent_coef_start  # entropy bonus is annealed linearly from start to end
         self.ent_coef_end = ent_coef_end
         self.policy_class = policy_class or NewSchedulingPolicy  # e.g. NoAttentionSchedulingPolicy
@@ -105,6 +115,11 @@ class ExperimentRunner:
         self.init_policy_path = init_policy_path  # policy weights to start PPO from (e.g. imitation pretraining)
         self.batch_size, self.n_epochs = batch_size, n_epochs
         self.gamma, self.gae_lambda, self.clip_range = gamma, gae_lambda, clip_range
+        # training seed: network init, action sampling and the training job sets. None -> the
+        # TRAIN_SEED environment variable if set, otherwise unseeded (every run differs).
+        self.seed = seed if seed is not None else (int(os.environ["TRAIN_SEED"]) if os.environ.get("TRAIN_SEED") else None)
+        self.reward_scale, self.drop_constant_rewards = reward_scale, drop_constant_rewards  # training env only
+        self.maskable_ppo = maskable_ppo  # sb3-contrib MaskablePPO with the environment's action masks
         self.ent_hold_fraction = ent_hold_fraction  # entropy bonus stays at its start value for this share of training
         self.n_envs = n_envs
         self.n_steps = n_steps  # per env; PPO batch per update = n_envs * n_steps
@@ -114,6 +129,7 @@ class ExperimentRunner:
         if self.run_with_wandb:
             self._run = wandb.init(
                 project="cluster-scheduling-simulator",
+                config={"train_seed": self.seed},
                 sync_tensorboard=True,
                 monitor_gym=True,
                 save_code=True,
@@ -129,7 +145,8 @@ class ExperimentRunner:
         self.run_id = "defualt" if not self.run_with_wandb else self._run.id
 
     def run(self) -> None:
-        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs, sjf_relative=self.sjf_relative_reward)
+        env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs, sjf_relative=self.sjf_relative_reward,
+                                       reward_scale=self.reward_scale, drop_constant_rewards=self.drop_constant_rewards)
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
@@ -140,7 +157,8 @@ class ExperimentRunner:
             wandb.finish()
 
     def _train(self, env) -> BaseAlgorithm:
-        model = PPO(
+        algo = MaskablePPO if self.maskable_ppo else PPO
+        model = algo(
             # "MultiInputPolicy",
             self.policy_class,
             env,
@@ -168,6 +186,7 @@ class ExperimentRunner:
             verbose=1,
             tensorboard_log=f"runs/{self.run_id}",
             policy_kwargs=self.policy_kwargs,
+            seed=self.seed,
             device=get_auto_device(),
         )
         if self.init_policy_path:
@@ -175,7 +194,9 @@ class ExperimentRunner:
             print(f"PPO starts from the pretrained policy: {self.init_policy_path}")
         callbacks = []
         eval_env = self.generate_enviroemnt(f"videos/{self.run_id}/eval", with_video=False)
-        callbacks.append(EvalCallback(
+        if self.seed is not None:
+            eval_env.seed(self.seed + 10_000)   # the 50-episode checks used to pick the best checkpoint
+        callbacks.append((MaskableEvalCallback if self.maskable_ppo else EvalCallback)(
             eval_env,
             best_model_save_path=f"models/{self.run_id}",
             log_path=f"models/{self.run_id}",
@@ -204,7 +225,7 @@ class ExperimentRunner:
         best_path = f"models/{self.run_id}/best_model.zip"
         if self.use_best_model and os.path.exists(best_path):
             print(f"Final evaluation uses best checkpoint: {best_path}")
-            model = PPO.load(best_path, device=get_auto_device())
+            model = (MaskablePPO if self.maskable_ppo else PPO).load(best_path, device=get_auto_device())
         return model
 
     def _evaluate(self, model: BaseAlgorithm, *, n_episodes: int, seed: int = 42, video_every: int = 100) -> None:
@@ -228,7 +249,10 @@ class ExperimentRunner:
 
             while not done:
                 steps += 1
-                action, _states = model.predict(obs, deterministic=True)
+                if self.maskable_ppo:
+                    action, _states = model.predict(obs, deterministic=True, action_masks=get_action_masks(envs))
+                else:
+                    action, _states = model.predict(obs, deterministic=True)
                 obs, reward, done_arr, infos = envs.step(action)
                 done = bool(done_arr[0])
                 total_reward += float(reward[0])
@@ -295,7 +319,8 @@ class ExperimentRunner:
 
 
 
-    def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4, sjf_relative: bool = False):
+    def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4, sjf_relative: bool = False,
+                            reward_scale: float = 1.0, drop_constant_rewards: bool = False):
         return generate_scheduling_env(
             config=self.config,
             max_time=self.max_time,
@@ -303,4 +328,7 @@ class ExperimentRunner:
             with_video=with_video,
             n_env=n_env,
             sjf_relative=sjf_relative,
+            maskable=self.maskable_ppo,
+            reward_scale=reward_scale,
+            drop_constant_rewards=drop_constant_rewards,
         )

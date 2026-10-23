@@ -141,7 +141,11 @@ class SchedulingEnviorment(gym.Env['ObservationDict', int]):
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple['ObservationDict', Information]:
         super().reset(seed=seed)
         self._consecutive_failures = 0
-        self._cluster = self._creator(self._config, np.random.default_rng(seed))
+        # explicit seed -> that job set (evaluation: 42 + episode). No seed -> draw from the env's own
+        # generator, which Env.reset(seed=...) / VecEnv.seed() seeded earlier, so a seeded training run
+        # sees the same sequence of job sets; unseeded it is random as before.
+        rng = np.random.default_rng(seed) if seed is not None else self.np_random
+        self._cluster = self._creator(self._config, rng)
         self._last_observation = self._cluster.get_observation()
         return self._cast(self._last_observation), {}
 

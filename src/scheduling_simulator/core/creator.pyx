@@ -1,6 +1,7 @@
 from .cluster cimport Cluster
 from .machine cimport Machine
 from .job cimport Job
+import os
 import numpy as np
 
 
@@ -91,9 +92,15 @@ cdef deeprm_generate_single_job_decreasing_size(ClusterGenerationConfig config, 
     # Per-resource usage: every resource gets its own value, drawn
     # independently from the same three levels, so any resources of a job
     # can be equal or different.
+    # With JOB_USAGE_MODE=random every resource of a job instead gets a uniformly random
+    # integer in [1, max_capacity] (no fixed set of levels). Default: the three levels.
     possible_options = [64, 128, 255]
+    random_usage = os.environ.get("JOB_USAGE_MODE") == "random"
     for resource_idx in range(config.n_resource):
-        usage[resource_idx, :size] = random.choice(possible_options)
+        if random_usage:
+            usage[resource_idx, :size] = random.integers(1, config.max_capacity + 1)
+        else:
+            usage[resource_idx, :size] = random.choice(possible_options)
 
 
 

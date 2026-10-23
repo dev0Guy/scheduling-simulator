@@ -1,14 +1,25 @@
 import typing as tp
 
+import gymnasium as gym
+
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 
 from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
 from scheduling_simulator.envioremnt.wrappers.sjf_relative_reward_wrapper import SJFRelativeRewardWrapper
+from scheduling_simulator.envioremnt.wrappers.clean_scaled_reward_wrapper import CleanScaledRewardWrapper
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
+
+
+class ExposeActionMasks(gym.Wrapper):
+    """Outermost wrapper: gymnasium 1.x wrappers do not forward attributes, and sb3-contrib's
+    MaskablePPO calls `env.env_method("action_masks")` on the top-level environment."""
+
+    def action_masks(self):
+        return self.env.unwrapped.action_masks()
 
 
 def generate_scheduling_env(
@@ -19,6 +30,9 @@ def generate_scheduling_env(
     n_env: int = 4,
     sjf_relative: bool = False,
     gamma: float = 0.995,
+    maskable: bool = False,
+    reward_scale: float = 1.0,
+    drop_constant_rewards: bool = False,
 ):
     """Single source of truth for building the eval/train environment stack.
 
@@ -35,7 +49,11 @@ def generate_scheduling_env(
         if sjf_relative:
             # training only: reward = r + gamma*V_SJF(s') - V_SJF(s) (see the wrapper)
             _env = SJFRelativeRewardWrapper(_env, gamma=gamma, max_time=max_time)
-        return Monitor(_env)
+        _env = Monitor(_env)
+        if reward_scale != 1.0 or drop_constant_rewards:
+            # training only; outside Monitor so the logged episode reward stays the original one
+            _env = CleanScaledRewardWrapper(_env, scale=reward_scale, drop_constants=drop_constant_rewards)
+        return ExposeActionMasks(_env) if maskable else _env
 
     envs = DummyVecEnv([make_env for _ in range(n_env)])
     if with_video:
