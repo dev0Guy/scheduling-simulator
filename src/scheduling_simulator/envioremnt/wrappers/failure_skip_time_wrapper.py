@@ -16,9 +16,18 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
     burn its whole step budget on invalid actions.
     """
 
-    def __init__(self, env: SchedulingEnviorment, max_time: int = 500):
+    def __init__(self, env: SchedulingEnviorment, max_time: int = 500, skip_penalty_divisor: float = 1.0,
+                 skip_reward_mode: str = "count"):
         super().__init__(env)
         self._max_time = max_time
+        # skip reward = -(pending + running jobs) / skip_penalty_divisor  (1.0 = the original reward;
+        # max_time gives -(waiting + running jobs) / max_ticks)
+        self._skip_div = float(skip_penalty_divisor)
+        # "count":    skip reward = -(number of pending + running jobs) / divisor        (original)
+        # "wait_sum": skip reward = -(sum of wait_time of the pending + running jobs) / divisor
+        #             (wait_time grows while a job is pending and freezes when it starts)
+        assert skip_reward_mode in ("count", "wait_sum")
+        self._skip_mode = skip_reward_mode
         self._time_counter = 0
 
     @staticmethod
@@ -41,6 +50,12 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
             for _, status in enumerate(observation['status'])
             if status in (JobStatus.PENDING, JobStatus.RUNNING)
         )
+
+    def _skip_penalty(self, observation: 'ObservationDict') -> float:
+        if self._skip_mode == "count":
+            return self._stupid_reward(observation)
+        active = (observation['status'] == JobStatus.PENDING) | (observation['status'] == JobStatus.RUNNING)
+        return -float(np.sum(observation['wait_time'][active]))
 
     @staticmethod
     def _completion_time_reward(observation: 'ObservationDict') -> float:
@@ -77,7 +92,7 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
             return observation, reward, done, False, info
 
         if skip_time:
-            return observation, self._stupid_reward(observation), terminated, False, info
+            return observation, self._skip_penalty(observation) / self._skip_div, terminated, False, info
 
         if has_allocation_failed:
             # Allocation attempt failed: burn one tick of simulated time
@@ -94,7 +109,7 @@ class FailureSkipTimeWrapper(Wrapper['ObservationDict', int, 'ObservationDict', 
                 return observation, reward, done, False, info
 
             invalid_action_penalty = -10
-            return observation, invalid_action_penalty + self._stupid_reward(observation), terminated, False, info
+            return observation, invalid_action_penalty + self._skip_penalty(observation) / self._skip_div, terminated, False, info
 
         return observation, 1.0, terminated, False, info
 

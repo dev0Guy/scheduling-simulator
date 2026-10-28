@@ -1,3 +1,4 @@
+import os
 import typing as tp
 
 import gymnasium as gym
@@ -9,6 +10,7 @@ from scheduling_simulator.envioremnt.envioremnt import SchedulingEnviorment
 from scheduling_simulator.envioremnt.wrappers.failure_skip_time_wrapper import FailureSkipTimeWrapper
 from scheduling_simulator.envioremnt.wrappers.sjf_relative_reward_wrapper import SJFRelativeRewardWrapper
 from scheduling_simulator.envioremnt.wrappers.clean_scaled_reward_wrapper import CleanScaledRewardWrapper
+from scheduling_simulator.envioremnt.wrappers.optimal_gap_reward_wrapper import OptimalGapRewardWrapper
 
 if tp.TYPE_CHECKING:
     from scheduling_simulator.core.creator import ClusterGenerationConfig
@@ -33,6 +35,9 @@ def generate_scheduling_env(
     maskable: bool = False,
     reward_scale: float = 1.0,
     drop_constant_rewards: bool = False,
+    optimal_gap_reward: bool = False,
+    normalize_skip_penalty: bool = False,
+    skip_reward_mode: str | None = None,
 ):
     """Single source of truth for building the eval/train environment stack.
 
@@ -45,12 +50,19 @@ def generate_scheduling_env(
 
     def make_env():
         _env = SchedulingEnviorment(config, render_mode=render_mode)
-        _env = FailureSkipTimeWrapper(_env, max_time=max_time)
+        # normalize_skip_penalty: skip reward = -(waiting + running jobs) / max_time instead of -(waiting + running)
+        _env = FailureSkipTimeWrapper(
+            _env, max_time=max_time,
+            skip_penalty_divisor=float(max_time) if normalize_skip_penalty else 1.0,
+            skip_reward_mode=skip_reward_mode or "count")
         if sjf_relative:
             # training only: reward = r + gamma*V_SJF(s') - V_SJF(s) (see the wrapper)
             _env = SJFRelativeRewardWrapper(_env, gamma=gamma, max_time=max_time)
         _env = Monitor(_env)
-        if reward_scale != 1.0 or drop_constant_rewards:
+        if optimal_gap_reward:
+            # training only: reward = Q*(s, a) - V*(s), the gap to the optimal action (exact solver)
+            _env = OptimalGapRewardWrapper(_env, capacity=config["max_capacity"])
+        elif reward_scale != 1.0 or drop_constant_rewards:
             # training only; outside Monitor so the logged episode reward stays the original one
             _env = CleanScaledRewardWrapper(_env, scale=reward_scale, drop_constants=drop_constant_rewards)
         return ExposeActionMasks(_env) if maskable else _env

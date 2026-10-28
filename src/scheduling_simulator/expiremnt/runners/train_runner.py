@@ -99,6 +99,9 @@ class ExperimentRunner:
         seed: int | None = None,
         reward_scale: float = 1.0,
         drop_constant_rewards: bool = False,
+        optimal_gap_reward: bool = False,
+        normalize_skip_penalty: bool = False,
+        skip_reward_mode: str = "count",
     ) -> None:
         self.learning_rate = learning_rate
         self.lr_decay = lr_decay          # linear decay to 5% of learning_rate
@@ -119,6 +122,10 @@ class ExperimentRunner:
         # TRAIN_SEED environment variable if set, otherwise unseeded (every run differs).
         self.seed = seed if seed is not None else (int(os.environ["TRAIN_SEED"]) if os.environ.get("TRAIN_SEED") else None)
         self.reward_scale, self.drop_constant_rewards = reward_scale, drop_constant_rewards  # training env only
+        # skip reward divided by max_time (training AND evaluation: it is a change of the reward itself)
+        self.normalize_skip_penalty = normalize_skip_penalty
+        self.skip_reward_mode = skip_reward_mode        # "count" (original) or "wait_sum"
+        self.optimal_gap_reward = optimal_gap_reward  # training env only: reward = gap to the optimal action
         self.maskable_ppo = maskable_ppo  # sb3-contrib MaskablePPO with the environment's action masks
         self.ent_hold_fraction = ent_hold_fraction  # entropy bonus stays at its start value for this share of training
         self.n_envs = n_envs
@@ -146,7 +153,8 @@ class ExperimentRunner:
 
     def run(self) -> None:
         env = self.generate_enviroemnt(f"videos/{self.run_id}", with_video=False, n_env=self.n_envs, sjf_relative=self.sjf_relative_reward,
-                                       reward_scale=self.reward_scale, drop_constant_rewards=self.drop_constant_rewards)
+                                       reward_scale=self.reward_scale, drop_constant_rewards=self.drop_constant_rewards,
+                                       optimal_gap_reward=self.optimal_gap_reward)
         print("Env:")
         print("\t Action space: ", env.action_space)
         print("\t Observation space: ", env.observation_space)
@@ -320,7 +328,8 @@ class ExperimentRunner:
 
 
     def generate_enviroemnt(self, path: str, with_video: bool = False, n_env: int = 4, sjf_relative: bool = False,
-                            reward_scale: float = 1.0, drop_constant_rewards: bool = False):
+                            reward_scale: float = 1.0, drop_constant_rewards: bool = False,
+                            optimal_gap_reward: bool = False):
         return generate_scheduling_env(
             config=self.config,
             max_time=self.max_time,
@@ -331,4 +340,7 @@ class ExperimentRunner:
             maskable=self.maskable_ppo,
             reward_scale=reward_scale,
             drop_constant_rewards=drop_constant_rewards,
+            optimal_gap_reward=optimal_gap_reward,
+            normalize_skip_penalty=self.normalize_skip_penalty,
+            skip_reward_mode=self.skip_reward_mode,
         )
