@@ -31,7 +31,8 @@ import numpy as np
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 M, N = int(os.environ.get("N_MACHINES", "1")), int(os.environ.get("N_JOBS", "30"))
-RUN_BY_MACHINES = {1: "ncpb2fyb", 2: "bsp1klua", 3: "perlec9c", 4: "t3lhn7a9"}   # masked PPO, M machines x 10 jobs
+RUN_BY_MACHINES = {1: "ncpb2fyb", 2: "bsp1klua", 3: "perlec9c", 4: "t3lhn7a9",
+                  5: "898vab55", 6: "tq4df6r4", 7: "pngze86f", 8: "ps0oqogy"}   # masked PPO, M machines x 10 jobs
 MODEL = os.environ.get("MODEL", os.path.join(ROOT, "models", RUN_BY_MACHINES[M], "final_model.zip"))
 ALLOW_SKIP = os.environ.get("ALLOW_SKIP", "1") == "1"
 CFG = {"n_machines": M, "n_jobs": N, "n_resource": 3, "n_time": 10, "max_capacity": 255}

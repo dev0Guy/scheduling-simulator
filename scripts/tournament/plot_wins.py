@@ -10,26 +10,34 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ppo_dir, out = sys.argv[1], sys.argv[2]
-cells = [(m, n) for n in (10, 20, 30, 40, 50) for m in (1, 2, 3, 4)]
-win = np.zeros((len(cells), 2))
-loss = np.zeros((len(cells), 2))
+import os
+# every cell that has a tournament result; the SJF rewards of the extended grid are stored in the tournament files.
+# The regular PPO is shown where a model exists (10 jobs: the same model as the tournament); otherwise the bars are left out.
+cells = [(m, n) for n in range(10, 101, 10) for m in range(1, 9) if os.path.exists(f"/tmp/tournament/m{m}_n{n}.npz")]
+win = np.full((len(cells), 2), np.nan)
+loss = np.full((len(cells), 2), np.nan)
 for i, (m, n) in enumerate(cells):
-    s = np.load(f"/tmp/sjf_m{m}_n{n}.npz")["reward"]
-    for k, r in enumerate((np.load(f"{ppo_dir}/ppo_m{m}_n{n}.npy"), np.load(f"/tmp/tournament/m{m}_n{n}.npz")["t_reward"])):
+    t = np.load(f"/tmp/tournament/m{m}_n{n}.npz")
+    s = t["s_reward"]
+    ppo = t["t_reward"] if n == 10 else (np.load(f"{ppo_dir}/ppo_m{m}_n{n}.npy") if os.path.exists(f"{ppo_dir}/ppo_m{m}_n{n}.npy") else None)
+    for k, r in enumerate((ppo, t["t_reward"])):
+        if r is None:
+            continue
         d = r - s
         win[i, k], loss[i, k] = 100 * (d > 1e-3).mean(), 100 * (d < -1e-3).mean()
-fig, ax = plt.subplots(figsize=(17, 6))
+fig, ax = plt.subplots(figsize=(40, 7))
 w, x = 0.2, np.arange(len(cells))
 # SJF's own wins = the other side of each comparison: episodes in which SJF has a strictly higher reward
 bars = (("SJF beats PPO", "#B8BECB", loss[:, 0]), ("PPO beats SJF", "#1F8A8A", win[:, 0]),
         ("SJF beats Tournament", "#8A93A5", loss[:, 1]), ("Tournament beats SJF", "#D9822B", win[:, 1]))
 for k, (name, c, v) in enumerate(bars):
     b = ax.bar(x + (k - 1.5) * w, v, w, label=name, color=c)
-    ax.bar_label(b, fmt="%.0f", fontsize=6.5, padding=2)
+    ax.bar_label(b, fmt="%.0f", fontsize=6, padding=2)
 ax.axhline(50, color="#8A93A5", ls="--", lw=1)
 ax.set_xticks(x, [f"{m}M\n{n}J" for m, n in cells])
-for j in range(1, 5):
-    ax.axvline(j * 4 - 0.5, color="#D9D6CC", lw=1)
+for i in range(1, len(cells)):
+    if cells[i][1] != cells[i - 1][1]:
+        ax.axvline(i - 0.5, color="#D9D6CC", lw=1)
 ax.set_ylim(0, 100)
 ax.set_xlabel("machines (M) / jobs (J)")
 ax.set_ylabel("win % against SJF (5000 episodes)")
