@@ -19,7 +19,7 @@ config = {
     "n_machines": n_machines,
     "n_jobs": n_jobs,
     "n_resource": 3,
-    "n_time": 10,
+    "n_time": int(os.environ.get("N_TIME", "10")),   # 15 for the DeepRM workload (jobs up to 15 ticks long)
     "max_capacity": 255,
 }
 

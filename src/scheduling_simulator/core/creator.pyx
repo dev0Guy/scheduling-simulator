@@ -107,10 +107,57 @@ cdef deeprm_generate_single_job_decreasing_size(ClusterGenerationConfig config, 
     return Job(usage=usage, arrival_time=arrival_time, size=size)
 
 
+cdef list[Job] deeprm_paper_jobs(ClusterGenerationConfig config, object random):
+    """Workload of the DeepRM paper (Mao et al., HotNets 2016, section 4.1), JOB_GEN_MODE=deeprm.
+    Duration: 80% uniform integer in [1, 3], 20% uniform in [10, 15] (capped at n_time).
+    Each job has one dominant resource (picked uniformly at random): its demand is uniform in [0.25, 0.5] of the capacity,
+    the demand of every other resource uniform in [0.05, 0.1]; constant over the job's duration.
+    Arrivals: a Poisson process (in the paper a Bernoulli one, here several jobs can arrive in the same tick) whose rate is set
+    so that the average load per machine and resource equals DEEPRM_LOAD (default 1.0 = 100% of the cluster capacity).
+    The first job arrives at tick 0."""
+    cdef:
+        int idx, r, dom, size
+        double cap = <double>config.max_capacity
+        double load = float(os.environ.get("DEEPRM_LOAD", "1.0"))
+        # demand ranges as fractions of the capacity (paper: dominant 0.25-0.5, others 0.05-0.1); DEEPRM_DEMAND_SCALE multiplies both
+        double scale = float(os.environ.get("DEEPRM_DEMAND_SCALE", "1.0"))
+        double dom_lo = 0.25 * scale, dom_hi = min(1.0, 0.5 * scale)
+        double oth_lo = 0.05 * scale, oth_hi = min(1.0, 0.1 * scale)
+        double mean_len = 0.8 * 2.0 + 0.2 * 12.5
+        double mean_share = (0.5 * (dom_lo + dom_hi) + (config.n_resource - 1) * 0.5 * (oth_lo + oth_hi)) / config.n_resource
+        double rate = load * config.n_machines / (mean_len * mean_share)
+        double t = 0.0
+        list[Job] jobs = []
+        int[:, ::1] usage
+        int arrival
+
+    for idx in range(config.n_jobs):
+        if idx > 0:
+            t += random.exponential(1.0 / rate)
+        arrival = <int>t
+        if random.random() < 0.8:
+            size = random.integers(1, 4)
+        else:
+            size = random.integers(10, 16)
+        size = min(size, config.n_time)
+        dom = random.integers(0, config.n_resource)
+        usage = np.zeros((config.n_resource, config.n_time), dtype=np.int32)
+        for r in range(config.n_resource):
+            if r == dom:
+                usage[r, :size] = <int>(cap * random.uniform(dom_lo, dom_hi))
+            else:
+                usage[r, :size] = max(1, <int>(cap * random.uniform(oth_lo, oth_hi)))
+        jobs.append(Job(usage=usage, arrival_time=arrival, size=size))
+    return jobs
+
+
 cdef list[Job] deeprm_capcity_jobs(ClusterGenerationConfig config, object random):
     cdef:
         unsigned int job_idx
         list[Job] jobs
+
+    if os.environ.get("JOB_GEN_MODE") == "deeprm":
+        return deeprm_paper_jobs(config, random)
 
     jobs = [
         deeprm_generate_single_job_decreasing_size(config, random, job_idx, config.n_jobs)

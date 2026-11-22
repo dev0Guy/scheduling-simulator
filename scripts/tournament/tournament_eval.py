@@ -27,20 +27,25 @@ import sys
 from multiprocessing import Pool
 
 import numpy as np
+from machine_select import select_machines
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 M, N = int(os.environ.get("N_MACHINES", "1")), int(os.environ.get("N_JOBS", "30"))
+# MODEL_MACHINES: machines the model was trained on (default = M). If smaller than M, every slice shows the model only that
+# many machines, chosen by machine_select.select_machines (tightest machines that fit a pending job, else random).
+MM = int(os.environ.get("MODEL_MACHINES", M))
 RUN_BY_MACHINES = {1: "ncpb2fyb", 2: "bsp1klua", 3: "perlec9c", 4: "t3lhn7a9",
                   5: "898vab55", 6: "tq4df6r4", 7: "pngze86f", 8: "ps0oqogy"}   # masked PPO, M machines x 10 jobs
-MODEL = os.environ.get("MODEL", os.path.join(ROOT, "models", RUN_BY_MACHINES[M], "final_model.zip"))
+MODEL = os.environ.get("MODEL", os.path.join(ROOT, "models", RUN_BY_MACHINES[MM], "final_model.zip"))
 ALLOW_SKIP = os.environ.get("ALLOW_SKIP", "1") == "1"
-CFG = {"n_machines": M, "n_jobs": N, "n_resource": 3, "n_time": 10, "max_capacity": 255}
+CFG = {"n_machines": M, "n_jobs": N, "n_resource": 3, "n_time": int(os.environ.get("N_TIME", "10")), "max_capacity": 255}   # N_TIME=15 for the DeepRM workload
 COMPLETED = 3
 _NEG = -1e8
 
 _policy = None
 _slots = None
+_rng = np.random.default_rng(0)
 _calls = 0
 
 
@@ -51,15 +56,17 @@ def _load():
     torch.set_num_threads(1)
     _policy = PPO.load(MODEL, device="cpu").policy
     _policy.set_training_mode(False)
+    if os.environ.get("FORBID_IDLE_SKIP") == "1":          # diagnostic: apply the idle-skip rule to a model trained without it
+        _policy.forbid_idle_skip = True
     _slots = int(_policy.observation_space["status"].shape[0])
-    assert _policy.observation_space["machines_usage"].shape[0] == M, "the model must be trained on the same number of machines"
+    assert _policy.observation_space["machines_usage"].shape[0] == MM, "MODEL_MACHINES must equal the number of machines the model was trained on"
     assert int(os.environ.get("SLICE", _slots)) == _slots, "SLICE must equal the model's job slots"
 
 
-def _slice(obs, jobs):
-    """Observation for the model: all machines, the given jobs in the first slots, empty padding after."""
+def _slice(obs, jobs, sel):
+    """Observation for the model: the machines `sel`, the given jobs in the first slots, empty padding after."""
     k = len(jobs)
-    out = {"machines_usage": obs["machines_usage"], "machines_capacity": obs["machines_capacity"],
+    out = {"machines_usage": obs["machines_usage"][sel], "machines_capacity": obs["machines_capacity"][sel],
            "time": obs["time"], "action_success": int(obs["action_success"])}
     ju = np.zeros((_slots,) + obs["jobs_usage"].shape[1:], obs["jobs_usage"].dtype)
     ju[:k] = obs["jobs_usage"][jobs]
@@ -78,7 +85,12 @@ def _decide(obs, chunks, final):
     """One batched forward over the slices of a round. Returns [(job, machine, probability)]; job None = skip."""
     global _calls
     import torch as th
-    batch = [_slice(obs, c) for c in chunks]
+    sels = [select_machines(obs["machines_usage"], obs["machines_capacity"], obs["jobs_usage"][c], obs["status"][c], MM, _rng)
+            if M > MM else list(range(M)) for c in chunks]
+    batch = [_slice(obs, c, sel) for c, sel in zip(chunks, sels)]
+    if "final_slice" in _policy.observation_space.spaces:       # models trained with the tournament inside the loop
+        for b in batch:
+            b["final_slice"] = np.array([float(final)], np.float32)
     stacked = {k: np.stack([np.asarray(b[k]) for b in batch]) for k in batch[0]}
     with th.no_grad():
         dist = _policy.get_distribution(_policy.obs_to_tensor(stacked)[0])   # applies the policy's own legality mask
@@ -88,7 +100,7 @@ def _decide(obs, chunks, final):
     for i, c in enumerate(chunks):
         lg = logits[i].clone()
         keep = th.zeros_like(lg, dtype=th.bool)
-        for m in range(M):                                 # real slots only, never padding
+        for m in range(MM):                                # real slots only, never padding
             keep[1 + m * _slots:1 + m * _slots + len(c)] = True
         if final and ALLOW_SKIP:
             keep[0] = True
@@ -98,7 +110,7 @@ def _decide(obs, chunks, final):
             res.append((-1, 0, 0.0))
             continue
         p = float(th.softmax(lg, 0)[a])
-        res.append((None, 0, p) if a == 0 else (c[(a - 1) % _slots], (a - 1) // _slots, p))
+        res.append((None, 0, p) if a == 0 else (c[(a - 1) % _slots], sels[i][(a - 1) // _slots], p))   # local machine -> real machine
     return res
 
 
@@ -135,6 +147,7 @@ def run(ep):
     for who in ("tournament", "sjf"):
         env = FailureSkipTimeWrapper(SchedulingEnviorment(CFG, render_mode="none"), max_time=11 * N)
         obs, _ = env.reset(seed=42 + ep)
+        _rng.bit_generator.state = np.random.default_rng(10_000 + ep).bit_generator.state   # reproducible random fill-in
         sj = ShortestJobScheduler()
         tot, done, steps = 0.0, False, 0
         while not done:
