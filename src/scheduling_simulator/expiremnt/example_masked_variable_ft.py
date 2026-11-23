@@ -44,5 +44,6 @@ runner = VariableJobsRunner(
     n_eval_episodes=50,
     ent_coef_start=float(os.environ.get("FT_ENT_START", 0.01)),
     ent_coef_end=float(os.environ.get("FT_ENT_END", 0.005)),
+    ent_hold_fraction=float(os.environ.get("FT_ENT_HOLD", 0.0)),   # keep the entropy bonus at its start value for this share of training
 )
 runner.run()

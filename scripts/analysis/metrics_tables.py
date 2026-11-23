@@ -6,7 +6,7 @@ import os, re, glob
 import numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 B = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-MODELS = {"model 9e90oa77 (10 slots)": "tournament_deeprm_n10", "model ha9gv7hl (20 slots, ft)": "tournament_deeprm_vft", "model q9050mka (20 slots)": "tournament_deeprm"}
+MODELS = {"model va02clzj (10 slots, 5M)": "tournament_deeprm_n10_5m", "model 9e90oa77 (10 slots)": "tournament_deeprm_n10", "model ha9gv7hl (20 slots, ft)": "tournament_deeprm_vft", "model q9050mka (20 slots)": "tournament_deeprm"}
 HEUR = {"SJF": "sjf", "SJF+BF": "sjf_bf", "Tetris (eps=0.5)": "tetris", "FIFO+BF": "fifo_bf"}
 EXTRA = {"Tetris (eps=5)": "tetris5"}     # results/heuristics_deeprm_tetris5
 cells = {}     # (m, n) -> {method: (reward, wait, completion)}
